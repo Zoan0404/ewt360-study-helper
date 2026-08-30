@@ -1,34 +1,20 @@
 <p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=26&duration=3000&pause=1000&color=A78BFA&center=true&vCenter=true&width=500&lines=%E5%8D%87%E5%AD%A6e%E7%BD%91%E9%80%9A+%E5%AD%A6%E4%B9%A0%E5%8A%A9%E6%89%8B%E5%90%88%E9%9B%86;%E4%B8%80%E9%94%AE%E5%88%B7%E5%8D%B7+%E8%87%AA%E5%8A%A8%E6%BB%A1%E5%88%86+%E7%AD%94%E6%A1%88%E9%80%9F%E6%9F%A5;%E5%AD%90%E6%AF%8D%E9%A2%98%E9%80%9A%E5%90%83+%E7%B2%89%E7%B4%AB%E6%A2%A6%E5%B9%BBUI" alt="Typing SVG" />
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=24&duration=3000&pause=1000&color=A78BFA&center=true&vCenter=true&width=520&lines=%E5%8D%87%E5%AD%A6e%E7%BD%91%E9%80%9A+%E5%AD%A6%E4%B9%A0%E5%8A%A9%E6%89%8B%E5%90%88%E9%9B%86;%E4%B8%80%E9%94%AE%E5%88%B7%E5%8D%B7+%E8%87%AA%E5%8A%A8%E6%BB%A1%E5%88%86+%E7%AD%94%E6%A1%88%E9%80%9F%E6%9F%A5;%E5%AD%90%E6%AF%8D%E9%A2%98%E9%80%9A%E5%90%83+%E7%B2%89%E7%B4%AB%E6%A2%A6%E5%B9%BBUI" alt="Typing SVG" />
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/脚本-试卷及习题助手-818cf8?logo=tampermonkey" />
-  <img src="https://img.shields.io/badge/脚本-学习助手opt-a78bfa?logo=tampermonkey" />
-  <img src="https://img.shields.io/badge/平台-web.ewt360.com%2Bteacher.ewt360.com-4a4a6a" />
+  <img src="https://img.shields.io/github/stars/Zxxaq1478359473/ewt360-study-helper?style=social" alt="Stars" />
+  <img src="https://img.shields.io/github/forks/Zxxaq1478359473/ewt360-study-helper?style=social" alt="Forks" />
+  <img src="https://img.shields.io/github/v/release/Zxxaq1478359473/ewt360-study-helper?style=flat&color=818cf8" alt="Release" />
+  <img src="https://img.shields.io/badge/License-ISC-4ade80" alt="License" />
+  <img src="https://img.shields.io/badge/version-v1.0.9-818cf8" alt="Version" />
 </p>
 
 <div align="center">
 
-[![GitHub stars](https://img.shields.io/github/stars/Zxxaq1478359473/ewt360-study-helper?style=for-the-badge&logo=github&color=818cf8)](https://github.com/Zxxaq1478359473/ewt360-study-helper/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/Zxxaq1478359473/ewt360-study-helper?style=for-the-badge&logo=github&color=818cf8)](https://github.com/Zxxaq1478359473/ewt360-study-helper/network/members)
-[![GitHub issues](https://img.shields.io/github/issues/Zxxaq1478359473/ewt360-study-helper?style=for-the-badge&logo=github&color=a78bfa)](https://github.com/Zxxaq1478359473/ewt360-study-helper/issues)
-[![GitHub release](https://img.shields.io/github/v/release/Zxxaq1478359473/ewt360-study-helper?style=for-the-badge&logo=github&label=Latest&color=818cf8)](https://github.com/Zxxaq1478359473/ewt360-study-helper/releases)
-[![License](https://img.shields.io/badge/License-ISC-4ade80?style=for-the-badge&logo=open-source-initiative)](https://opensource.org/licenses/ISC)
-[![Tampermonkey](https://img.shields.io/badge/Tampermonkey-✓-00485B?style=for-the-badge&logo=tampermonkey)](https://www.tampermonkey.net/)
-[![Version](https://img.shields.io/badge/version-v1.0.9-818cf8?style=for-the-badge)]()
+> 🚀 **一键刷卷 · 自动满分 · 答案速查 · 子母题通吃 · 粉紫梦幻UI**
 
----
-
-## 🎯 特性一览
-
-| 🚀 全自动刷题 | 📄 独立答案速查 | 🧩 子母题通吃 | 🎨 粉紫梦幻UI |
-|:---:|:---:|:---:|:---:|
-| 无人值守流水线 | 解析/知识点/公式图 | 大小题递归作答 | 渐变侧边栏面板 |
-
-**深度支持**：`一键扫描` · `全自动满分` · `混合题型` · `答案弹窗` · `锁卷安全` · `webreport全量`
-
-专为升学e网通（ewt360.com）打造的自动化刷题辅助脚本合集，支持独立试卷与课程习题，让刷题从"手动点题"升级为"全自动流水线"。
+专为升学e网通（ewt360.com）打造的**自动化刷题辅助脚本合集**，支持独立试卷与课程习题，让刷题从「手动点题」升级为「全自动流水线」——**安装即用，免费开源**。
 
 [💾 快速安装](#-安装) ·
 [✨ 功能特性](#-核心功能) ·
@@ -131,11 +117,23 @@
 
 ---
 
-## ✨ 核心功能
+## ✨ 功能特性
+
+| 功能 | 说明 |
+|------|------|
+| 🚀 **全自动刷题** | 扫描 → 报告 → 题目 → 答案 → 提交 → 交卷 → 自批满分，全程无人值守 |
+| 🧩 **子母题 & 混合题型** | 大题带小题递归作答，选择/主观题自动分流 |
+| 📡 **一键扫描** | 三接口聚合，自动汇总全部未完成任务，按天/学科分组 |
+| ✅ **完成状态检测** | 已完成任务自动跳过、锁定，杜绝重复刷 |
+| 📄 **独立答案查看** (opt) | 一键拉取全卷答案，弹窗展示解析/知识点/公式图 |
+| 🛡️ **稳定可靠** | 超时重试 / token 检测 / 空卷保护 / XSS 防御 / Token 防泄露 |
+| 🎨 **粉紫梦幻 UI** | 渐变浮动按钮 + 380px 侧边栏 + 移动端全屏适配 |
+
+> **🏆 实测亮点**：webreport 全量答案接口 1 次 GET 拿全卷答案，刷题请求量降低 5-10 倍；支持三档速度（🟢 快 / 🟡 中 / 🐢 稳），弱网也能稳定刷完。
+
+---
 
 ### 🚀 全自动刷题流水线
-
-一键扫描全部必学任务，自动完成全流程，无人值守：
 
 ```
 扫描任务 → 初始化报告 → 拉取题目 → 获取答案 → 批量提交 → 交卷 → 自批满分
@@ -145,40 +143,6 @@
 - 实时显示总体进度与当前任务状态
 - 三档速度可选（🟢 快 / 🟡 中 / 🐢 稳），切换即时生效并记住选择
 
-### 🧩 子母题型 & 混合题型
-
-- 完整支持子母题（大题带小题）作答结构，递归解析 `childQuestions`
-- 自动修复组内多题共享答案数组（`fixGroupAnswers`）
-- 父子题分值自动透传，自批得分不丢分、不漏分
-- 选择题直接填选项、主观题按满分自批，混合题型无缝切换
-
-### 📡 一键扫描功能
-
-集成三接口自动汇总所有未完成任务：
-
-```
-getStudentHomeworkDaySubjectStat + pageHomeworkTasks + queryStudentLessonStudyGuideAndPractice
-```
-
-- 按天 / 按学科双视图展示
-- 自动识别试卷（bizCode=205）与课程习题（bizCode=204）
-- 失败自动降级回退
-
-### ✅ 完成状态检测
-
-- 自动检测任务完成状态（`finished` / `finishStatus===1`）
-- 已完成任务自动跳过，按钮显示 ✅ 并锁定，杜绝重复刷浪费次数
-
-### 🎯 提交功能优化
-
-| 题型 | 提交方式 | 说明 |
-|------|----------|------|
-| 选择题 | `revision=false` | 直接填充选项快速提交 |
-| 非选择题 | `revision=true` + 满分 score | 利用自批机制提交满分 |
-
-- 题目获取双接口降级：优先 `getAnswerSheetSubGroup`，失败自动降级 `answerSheetInfo`
-- 交卷时长 60~180s 随机拟真，更贴近真实作答
-
 ### 📄 答案查看（opt 专属）
 
 - 每个任务旁的「📄 获取答案」按钮，一键拉取全部答案
@@ -187,24 +151,7 @@ getStudentHomeworkDaySubjectStat + pageHomeworkTasks + queryStudentLessonStudyGu
   - 🧠 知识点标签
   - 📖 题目解析（保留 Wiris 数学公式图片）
   - 🧩 复合题子题归属父题分组显示
-- 专用锁卷报告兜底，**绝不碰主报告**，任务成绩安全
-
-### 🛡️ 稳定可靠
-
-- token 过期自动检测（`TokenExpiredError`），弹出桌面通知提示重新登录
-- 内置指数退避重试（失败 1s / 2s 自动重试）
-- 10s 请求超时 + 401 登录失效识别
-- 题目清洗保留 Wiris 公式图片，数学公式不丢失
-- 空卷保护：未获取到任何题目/答案时中止提交
-- XSS 防御：HTML 清洗剥离 `on*` 事件属性与 `javascript:` 协议
-- Token 防泄露：请求头传递 + 日志脱敏
-
-### 🎨 精美 UI
-
-- 粉紫渐变（`#f9a8d4 → #a78bfa → #818cf8`）浮动圆形按钮
-- 右侧滑入 380px 侧边栏面板，任务/设置/关于多视图切换
-- 移动端全屏适配
-- 右下角悬浮进度卡片
+- 专用报告兜底，**绝不碰主报告**，任务成绩安全
 
 ---
 
