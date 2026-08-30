@@ -1,16 +1,32 @@
+<p align="center">
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=26&duration=3000&pause=1000&color=A78BFA&center=true&vCenter=true&width=500&lines=升学e网通+学习助手合集;一键刷卷+自动满分+答案速查;子母题通吃+粉紫梦幻UI" alt="Typing SVG" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/脚本-试卷及习题助手-818cf8?logo=tampermonkey" />
+  <img src="https://img.shields.io/badge/脚本-学习助手opt-a78bfa?logo=tampermonkey" />
+  <img src="https://img.shields.io/badge/平台-web.ewt360.com%2Bteacher.ewt360.com-4a4a6a" />
+</p>
+
 <div align="center">
 
-# 📖 升学e网通 学习助手合集
+[![GitHub stars](https://img.shields.io/github/stars/Zxxaq1478359473/ewt360-study-helper?style=for-the-badge&logo=github&color=818cf8)](https://github.com/Zxxaq1478359473/ewt360-study-helper/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/Zxxaq1478359473/ewt360-study-helper?style=for-the-badge&logo=github&color=818cf8)](https://github.com/Zxxaq1478359473/ewt360-study-helper/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/Zxxaq1478359473/ewt360-study-helper?style=for-the-badge&logo=github&color=a78bfa)](https://github.com/Zxxaq1478359473/ewt360-study-helper/issues)
+[![GitHub release](https://img.shields.io/github/v/release/Zxxaq1478359473/ewt360-study-helper?style=for-the-badge&logo=github&label=Latest&color=818cf8)](https://github.com/Zxxaq1478359473/ewt360-study-helper/releases)
+[![License](https://img.shields.io/badge/License-ISC-4ade80?style=for-the-badge&logo=open-source-initiative)](https://opensource.org/licenses/ISC)
+[![Tampermonkey](https://img.shields.io/badge/Tampermonkey-✓-00485B?style=for-the-badge&logo=tampermonkey)](https://www.tampermonkey.net/)
+[![Version](https://img.shields.io/badge/version-v1.0.9-818cf8?style=for-the-badge)]()
 
-[![GitHub stars](https://img.shields.io/github/stars/Zxxaq1478359473/ewt360-study-helper?style=social)](https://github.com/Zxxaq1478359473/ewt360-study-helper/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/Zxxaq1478359473/ewt360-study-helper?style=social)](https://github.com/Zxxaq1478359473/ewt360-study-helper/network/members)
-[![GitHub issues](https://img.shields.io/github/issues/Zxxaq1478359473/ewt360-study-helper)](https://github.com/Zxxaq1478359473/ewt360-study-helper/issues)
-[![GitHub release](https://img.shields.io/github/v/release/Zxxaq1478359473/ewt360-study-helper?label=release)](https://github.com/Zxxaq1478359473/ewt360-study-helper/releases)
-[![License](https://img.shields.io/badge/License-ISC-green.svg)](https://opensource.org/licenses/ISC)
-[![Tampermonkey](https://img.shields.io/badge/Tampermonkey-✓-00485B?logo=tampermonkey)](https://www.tampermonkey.net/)
-[![Version](https://img.shields.io/badge/version-v1.0.9-818cf8)]()
+---
 
-**一键扫描 · 自动满分 · 答案速查 · 子母题通吃 · 粉紫梦幻UI**
+## 🎯 特性一览
+
+| 🚀 全自动刷题 | 📄 独立答案速查 | 🧩 子母题通吃 | 🎨 粉紫梦幻UI |
+|:---:|:---:|:---:|:---:|
+| 无人值守流水线 | 解析/知识点/公式图 | 大小题递归作答 | 渐变侧边栏面板 |
+
+**深度支持**：`一键扫描` · `全自动满分` · `混合题型` · `答案弹窗` · `锁卷安全` · `webreport全量`
 
 专为升学e网通（ewt360.com）打造的自动化刷题辅助脚本合集，支持独立试卷与课程习题，让刷题从"手动点题"升级为"全自动流水线"。
 
@@ -18,6 +34,7 @@
 [✨ 功能特性](#-核心功能) ·
 [📖 使用指南](#-使用指南) ·
 [❓ 常见问题](#-常见问题-faq) ·
+[📦 版本历史](https://github.com/Zxxaq1478359473/ewt360-study-helper/releases) ·
 [🐛 反馈问题](https://github.com/Zxxaq1478359473/ewt360-study-helper/issues)
 
 </div>
@@ -44,19 +61,19 @@
 
 本仓库包含两个脚本，按需选择：
 
-| 对比项 | 试卷及习题助手 | 学习助手opt |
-|--------|:--------------:|:-----------:|
-| 全自动刷题 | ✅ | ✅ |
-| 子母题/混合题型 | ✅ | ✅ |
-| 一键扫描 | ✅ | ✅ |
-| 完成状态检测 | ✅ | ✅ |
-| **独立答案查看** | ❌ | ✅ |
-| 答案弹窗（解析/知识点） | ❌ | ✅ |
-| 查看答案安全锁卷 | — | ✅ |
-| 脚本体积 | ~94 KB | ~122 KB |
-| 油叉地址 | [📎 591256](https://greasyfork.org/zh-CN/scripts/591256) | [📎 591258](https://greasyfork.org/zh-CN/scripts/591258) |
+| 对比项 | 📄 试卷及习题助手 | 🎓 学习助手opt |
+|--------|:-------------------:|:----------------:|
+| ⚡ 全自动刷题 | ✅ | ✅ |
+| 🧩 子母题/混合题型 | ✅ | ✅ |
+| 📡 一键扫描 | ✅ | ✅ |
+| ✅ 完成状态检测 | ✅ | ✅ |
+| 📖 **独立答案查看** | ❌ | ✅ |
+| 📝 答案弹窗（解析/知识点） | ❌ | ✅ |
+| 🔒 查看答案安全锁卷 | — | ✅ |
+| 📦 脚本体积 | ~94 KB | ~122 KB |
+| 🌐 油叉地址 | 📎 [591256](https://greasyfork.org/zh-CN/scripts/591256) | 📎 [591258](https://greasyfork.org/zh-CN/scripts/591258) |
 
-> 💡 **只需要刷题** → 选「试卷及习题助手」，更轻量；**还想独立查看答案和解析** → 选「学习助手opt」。建议只安装一个避免重复。
+> 💡 **只需要刷题** → 选「**试卷及习题助手**」，轻量省心；**还想独立查看答案和解析** → 选「**学习助手opt**」，功能更全。建议只安装一个，避免重复。👌
 
 ---
 
@@ -84,10 +101,10 @@
 1. 浏览器安装 [Tampermonkey](https://www.tampermonkey.net/) 或 [Violentmonkey](https://violentmonkey.github.io/) 扩展
 2. 点击下方对应脚本的安装按钮：
 
-| 脚本 | 安装 | 主页 |
-|------|------|------|
-| 试卷及习题助手 | [⬇️ 安装](https://update.greasyfork.org/scripts/591256/%E5%8D%87%E5%AD%A6e%E7%BD%91%E9%80%9A%20%E8%AF%95%E5%8D%B7%E5%8F%8A%E4%B9%A0%E9%A2%98%E5%8A%A9%E6%89%8B.user.js) | [📎 Greasy Fork](https://greasyfork.org/zh-CN/scripts/591256) |
-| 学习助手opt | [⬇️ 安装](https://update.greasyfork.org/scripts/591258/%E5%8D%87%E5%AD%A6e%E7%BD%91%E9%80%9A%20%E5%AD%A6%E4%B9%A0%E5%8A%A9%E6%89%8Bopt.user.js) | [📎 Greasy Fork](https://greasyfork.org/zh-CN/scripts/591258) |
+| 脚本 | 一键安装 | Greasy Fork 主页 |
+|------|:--------:|:----------------:|
+| 试卷及习题助手 | [![安装](https://img.shields.io/badge/⬇️-安装-818cf8?style=for-the-badge&logo=tampermonkey)](https://update.greasyfork.org/scripts/591256/%E5%8D%87%E5%AD%A6e%E7%BD%91%E9%80%9A%20%E8%AF%95%E5%8D%B7%E5%8F%8A%E4%B9%A0%E9%A2%98%E5%8A%A9%E6%89%8B.user.js) | [📎 591256](https://greasyfork.org/zh-CN/scripts/591256) |
+| 学习助手opt | [![安装](https://img.shields.io/badge/⬇️-安装-a78bfa?style=for-the-badge&logo=tampermonkey)](https://update.greasyfork.org/scripts/591258/%E5%8D%87%E5%AD%A6e%E7%BD%91%E9%80%9A%20%E5%AD%A6%E4%B9%A0%E5%8A%A9%E6%89%8Bopt.user.js) | [📎 591258](https://greasyfork.org/zh-CN/scripts/591258) |
 
 3. 打开 [升学e网通](https://web.ewt360.com) 并登录，右下角出现**粉紫色圆形浮动按钮**即安装成功 🎉
 
@@ -280,25 +297,35 @@ getStudentHomeworkDaySubjectStat + pageHomeworkTasks + queryStudentLessonStudyGu
 
 ---
 
-## 🏗️ 技术架构
+<details>
+<summary><b>🏗️ 技术架构（点击展开）</b></summary>
 
 ```
-┌─────────────────────────────────────────────┐
-│         油猴脚本（Tampermonkey）              │
-├─────────────────────────────────────────────┤
-│  扫描模块 → 报告模块 → 题目模块 → 提交模块      │
-│  (scan)   (initReport) (getQuestions)        │
-│                                             │
-│  答案模块 → 交卷模块 → 自批模块 → UI 面板       │
-│  (webreport)(submitPaper)(submitCorrected)  │
-└──────────────────┬──────────────────────────┘
-                   │ HTTPS (GM_xmlhttpRequest)
-                   ▼
-┌─────────────────────────────────────────────┐
-│            ewt360.com 官方 API               │
-│  gateway.ewt360.com / web.ewt360.com         │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│         🌸 升学e网通 学习助手合集（油猴脚本）            │
+├──────────────────────────────────────────────────────┤
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
+│  │ 扫描模块 │→│ 报告模块 │→│ 题目模块 │→│ 答案模块 │  │
+│  │ scanTasks│ │initReport│ │getQuestions│ │webreport│  │
+│  └─────────┘  └─────────┘  └─────────┘  └─────────┘  │
+│        ↓                                            │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
+│  │ 提交模块 │→│ 交卷模块 │→│ 自批模块 │→│ UI 面板  │  │
+│  │submitBatch│ │submitPaper│ │submitCorrected│ │3视图  │  │
+│  └─────────┘  └─────────┘  └─────────┘  └─────────┘  │
+├──────────────────────────────────────────────────────┤
+│  GM_xmlhttpRequest 跨域请求 · token 注入 · 超时重试    │
+│  双请求头（web / teacher）· 并发控制 · 停止信号        │
+└──────────────────────┬───────────────────────────────┘
+                       │ HTTPS
+                       ▼
+┌──────────────────────────────────────────────────────┐
+│              ewt360.com 官方 API 网关                 │
+│        gateway.ewt360.com / web.ewt360.com            │
+└──────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 ### 📁 项目结构
 
