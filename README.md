@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=26&duration=3000&pause=1000&color=A78BFA&center=true&vCenter=true&width=500&lines=升学e网通+学习助手合集;一键刷卷+自动满分+答案速查;子母题通吃+粉紫梦幻UI" alt="Typing SVG" />
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=26&duration=3000&pause=1000&color=A78BFA&center=true&vCenter=true&width=500&lines=%E5%8D%87%E5%AD%A6e%E7%BD%91%E9%80%9A+%E5%AD%A6%E4%B9%A0%E5%8A%A9%E6%89%8B%E5%90%88%E9%9B%86;%E4%B8%80%E9%94%AE%E5%88%B7%E5%8D%B7+%E8%87%AA%E5%8A%A8%E6%BB%A1%E5%88%86+%E7%AD%94%E6%A1%88%E9%80%9F%E6%9F%A5;%E5%AD%90%E6%AF%8D%E9%A2%98%E9%80%9A%E5%90%83+%E7%B2%89%E7%B4%AB%E6%A2%A6%E5%B9%BBUI" alt="Typing SVG" />
 </p>
 
 <p align="center">
