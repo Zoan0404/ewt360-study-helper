@@ -2,7 +2,7 @@
 
 > **一键刷卷 · 自动满分 · 答案速查 · 子母题通吃 · 粉紫梦幻UI**
 >
-> 🛠 Tampermonkey / Violentmonkey ｜ 📌 **v1.1.0** 最新 ｜ 📦 ~123 KB（2500+ 行）｜ 🔒 ISC License
+> 🛠 Tampermonkey / Violentmonkey ｜ 📌 **v1.1.1** 最新 ｜ 📦 ~118 KB（2500+ 行）｜ 🔒 ISC License
 
 还在为升学e网通堆积如山的假期试卷发愁吗？还在为一道一道点题、提交、等批改而浪费时间吗？
 
@@ -40,7 +40,7 @@
 
 ## ⬇️ 快速安装
 
-[![安装此脚本](https://img.shields.io/badge/⬇️%20安装此脚本-v1.1.0-818cf8?style=for-the-badge)](https://update.greasyfork.org/scripts/591258/%E5%8D%87%E5%AD%A6e%E7%BD%91%E9%80%9A%20%E5%AD%A6%E4%B9%A0%E5%8A%A9%E6%89%8Bopt.user.js)
+[![安装此脚本](https://img.shields.io/badge/⬇️%20安装此脚本-v1.1.1-818cf8?style=for-the-badge)](https://update.greasyfork.org/scripts/591258/%E5%8D%87%E5%AD%A6e%E7%BD%91%E9%80%9A%20%E5%AD%A6%E4%B9%A0%E5%8A%A9%E6%89%8Bopt.user.js)
 [![Greasy Fork](https://img.shields.io/badge/Greasy_Fork-脚本主页-a78bfa?style=flat-square)](https://greasyfork.org/zh-CN/scripts/591258)
 
 > 💡 **两个脚本怎么选？** 往下看 [对比表](#-与试卷及习题助手的区别)
@@ -129,57 +129,42 @@
 | 答案弹窗显示优化 | ❌ | ✅ **卷面题数统计/子题分组/多选并列显示** |
 | 查看答案安全锁卷 | — | ✅ **专用报告兜底，绝不碰主报告** |
 | FAQ 常见问题 | 基础 | ✅ 丰富 |
-| 脚本体积 | ~90 KB | ~118 KB |
+| 脚本体积 | ~92 KB | ~118 KB |
 
 > 👉 如果你只需要刷题，选「试卷及习题助手」更轻量；如果你还想**独立查看答案和解析**，选本脚本（opt）功能更全。
 
 ---
 
-## 🚀 v1.1.0 版本亮点
+## 🚀 v1.1.1 版本亮点
 
-> **🔥 重大更新：校本试卷总任务页刷取 + 锁卷安全再升级**
+> **⚡ 统一提交逻辑：课后习题(204) / 独立试卷(205) / 试卷变体(206) / 校本试卷(207) 一套链路满分通刷**
 
-把此前内部升级（201 通道锁卷、归属复核、占位排序、关于页打磨）与**新发布能力——校本试卷（bizCode=207）总任务页刷取**共同打包成 **v1.1.0**，是自 v1.0.8 锁卷安全升级以来最重磅的一版。
-
-### 🎯【全新】校本试卷（bizCode=207）总任务页刷取
-| 升级项 | 说明 |
-|--------|------|
-| 🌱 **新增 207 通道** | 校本试卷 / 作业提交入口此前只能在具体试卷页刷、总任务页无法刷（被错误并入 205 客观题空间、服务器不识别）；v1.1.0 增加独立 `bizCode=CUSTOM(207)`，**总任务页即可一键刷取并自动满分** |
-| 🔀 **题型识别修正** | 扫描逻辑将 contentTypeName「校本试卷」/ 标题或卡片含「作业提交/校本」/ code=207 的任务正确归为校本，不再硬判 205 |
-| 📚 **答案/报告读取对齐** | 205 与 207 统一走 `/webreport/questionGroup?…&bizCode=&homeworkId=` 题组嵌套读取 |
-| ✅ **已实机验证** | 数学/化学/生物等「作业提交入口」卷已在真实环境达 100 满分 |
-
-### 🔐 锁卷安全（承接内部 v1.0.10）
-- 锁卷载体迁移到 **201 查看态报告**：与任务成绩报告空间完全隔离，杜绝「时好时坏」污染真实成绩
-- **提交满分前归属复核**：服务器复用任务原报告时立即中止，双重防护真实成绩不被改写
-
-### 🧹 体验
-- 任务列表占位排序修复；关于页作者区加分隔线、清理冗余中文注释，界面更清晰
-
----
-## 🚀 v1.0.9 版本亮点
-
-> **答案获取增强：多字段兜底 · 图片归一化 · 取答案成功率更高**
-
-基于 v1.0.8，借鉴开源 Android 应用「Fuck Ewt」（ewttest）的答案获取逻辑，全面增强答案提取的兼容性与成功率。
+v1.1.1 把四种可刷题型（204 课后习题、205 独立试卷、206 试卷变体、207 校本试卷）的提交逻辑统一为**一条标准三连链路**，新增 206 试卷变体支持，并修复 207 校本试卷在统一逻辑下的满分提交——提交体系自此「一套代码通刷」。
 
 | 升级项 | 说明 |
 |--------|------|
-| 🔍 **答案多字段兜底** | rightAnswer / rightAnswers / answers / answer / standardAnswer / correctAnswer / answerContent / trueAnswer / myAnswer / answerList 共 9 种字段逐一尝试，服务器字段命名变化不再丢答案 |
-| 📖 **解析多字段兜底** | analyse / analysis / analysisContent / analyseContent / answerAnalysis / parse / parseContent / explanation 共 8 种字段逐一尝试，解析缺失率大幅下降 |
-| 🖼️ **附件图片归一化** | attachmentImages 统一 http→https，公式图/插图在 HTTPS 页面稳定加载 |
-| 📇 **报告ID多字段提取** | reportId / report / id 三字段兼容，报告初始化与查询更稳健 |
-| 🎯 **答案源候选扩展** | 增加 bizCode=201 查看态报告兜底候选（analysis 兼容 201），无已完成报告时取答案成功率更高 |
-
-**✅ 修复效果：**
-- 个别试卷答案/解析字段命名不同不再丢失
-- 附件图片显示更稳定（http 混合内容拦截不再发生）
-- 特殊试卷（无已完成报告）取答案成功率提升
+| 🔗 **统一提交逻辑（重大）** | 204/205/206/207 共用「自动填答 submitAnswersBatch → 交卷 submitPaper → 自批满分 submitCorrected」标准三连，主观题携带满分自批标记，不再各通道各写各的 |
+| 🆕 **新增 206 试卷支持** | 官方 contentType=2(EXAM_PAPER) 内部按 bizCode 分流 205/206；扫描时从任务 contentUrl 提取真实 bizCode，206 试卷不再被误判 205 提交失败，现已可满分刷取 |
+| 🔧 **修复 207 满分提交** | 校本试卷(207) 回归标准三连（v1.1.0 实测满分路径），废弃会被服务器判 0 分的空卷提交分支 |
+| ✅ **已实机验证** | 204/205/206/207 四类任务均已实机满分通过 |
 
 ---
+
 ## 📋 更新日志
 
-### v1.1.0 `最新` — 🎉 校本试卷总任务页刷取 · 锁卷安全升级（重大更新）
+### v1.1.1 `最新` — ⚡ 统一提交逻辑：204/205/206/207 一套链路满分通刷
+
+> **基于 v1.1.0**：四种可刷题型（课后习题/独立试卷/试卷变体/校本试卷）提交逻辑统一为一条标准三连链路；新增 206 试卷变体支持；修复 207 校本试卷满分提交。
+
+- **🔗（重大）统一提交逻辑**：204/205/206/207 共用「自动填答 submitAnswersBatch → 交卷 submitPaper → 自批满分 submitCorrected」标准三连，主观题携带满分自批标记，不再各通道各写各的
+- **🆕 新增 206 试卷支持**：扫描时从任务 contentUrl 提取真实 bizCode，206 试卷（contentType=2 分流）不再被硬判 205 提交到错误报告空间，自动识别并满分刷取
+- **🔧 修复校本试卷(207) 满分提交**：207 回归标准三连（主观题自批满分），废弃空卷提交分支——空卷提交会被服务器判 0 分
+- **🏷️ 类型标签扩展**：206 任务显示「试卷」类型
+
+---
+
+<details>
+<summary><b>v1.1.0 — 🎉 校本试卷总任务页刷取 · 锁卷安全升级（重大更新）</b>（点击展开）</summary>
 
 > **自 v1.0.8 锁卷安全升级以来最重磅版本**：新增「校本试卷（bizCode=207）」总任务页刷取通道并自动满分；承接内部 v1.0.10 锁卷 201 通道 / 归属复核；同步排序修复与关于页/注释打磨。
 
@@ -191,7 +176,10 @@
 - **🧹 排序修复**：课程/试卷按服务器真实顺序回填展示；关于页作者区加分隔线、清理注释
 
 ---
-### v1.0.9 — 答案获取增强：多字段兜底 · 图片归一化 · 201查看态候选
+</details>
+
+<details>
+<summary><b>v1.0.9 — 答案获取增强：多字段兜底 · 图片归一化 · 201查看态候选</b>（点击展开）</summary>
 
 > **基于 v1.0.8**，借鉴开源 Android 应用「Fuck Ewt」（ewttest）的答案获取逻辑，全面增强答案提取兼容性与成功率。
 
@@ -212,8 +200,10 @@
 
 ---
 
+</details>
+
 <details>
-<summary><b>v1.0.8</b> — 锁卷安全机制升级：原报告答题 · 归属检测 · 杜绝成绩污染</summary>
+<summary><b>v1.0.8</b> — 锁卷安全机制升级：原报告答题 · 归属检测 · 杜绝成绩污染（点击展开）</summary>
 
 > **基于 v1.0.7**，针对部分试卷锁卷生成真实作答报告的问题全面加固。
 
@@ -229,7 +219,7 @@
 - 创建回显检测 → 锁卷前归属检测 → 原报告答题，逐层拦截
 </details>
 <details>
-<summary><b>v1.0.7</b> — 稳定性大修：关于页 HTML 修复 · userId 缓存 · 核心 API 全面重试</summary>
+<summary><b>v1.0.7</b> — 稳定性大修：关于页 HTML 修复 · userId 缓存 · 核心 API 全面重试（点击展开）</summary>
 
 > **基于 v1.0.6**，聚焦稳定性与细节修复。
 
@@ -248,7 +238,7 @@
 </details>
 
 <details>
-<summary><b>v1.0.6</b> — 全量答案接口：webreport 1 次请求替代逐题 analysis</summary>
+<summary><b>v1.0.6</b> — 全量答案接口：webreport 1 次请求替代逐题 analysis（点击展开）</summary>
 
 > **基于 v1.0.5**，刷题答案获取链路升级为 webreport 报告接口全量获取。
 
@@ -267,7 +257,7 @@
 </details>
 
 <details>
-<summary><b>v1.0.5</b> — 答案弹窗全面修复：题数按卷面统计 · 复合题子题分组 · 多选并列显示 · 浏览页自动识别</summary>
+<summary><b>v1.0.5</b> — 答案弹窗全面修复：题数按卷面统计 · 复合题子题分组 · 多选并列显示 · 浏览页自动识别（点击展开）</summary>
 
 > **基于 v1.0.4**，针对实机反馈的「答案弹窗显示」系列问题全面修复，并补全 bizCode=201 浏览页入口识别。
 
@@ -284,7 +274,7 @@
 </details>
 
 <details>
-<summary><b>v1.0.4</b> — 重刷机制大揭秘：204习题可重做 · 205成绩固化 · 刷题与查看答案双保险</summary>
+<summary><b>v1.0.4</b> — 重刷机制大揭秘：204习题可重做 · 205成绩固化 · 刷题与查看答案双保险（点击展开）</summary>
 
 > **基于 v1.0.3**，本轮实机验证并集成官方「重新作答」接口；同时修复「查看答案」误锁主报告的重大隐患。
 
@@ -312,7 +302,7 @@
 </details>
 
 <details>
-<summary><b>v1.0.3</b> — 稳定性与安全性全面修复</summary>
+<summary><b>v1.0.3</b> — 稳定性与安全性全面修复（点击展开）</summary>
 
 **🔧 核心修复：**
 - **修复「获取答案失败：不支持此种类型的请求」**（HTTP 415）
@@ -329,7 +319,7 @@
 </details>
 
 <details>
-<summary><b>v1.0.2</b> — 修复独立试卷刷题失败（2026-08-15）</summary>
+<summary><b>v1.0.2</b> — 修复独立试卷刷题失败（2026-08-15）（点击展开）</summary>
 
 **🔧 主要修复：**
 - **修复独立试卷（bizCode=205）刷题失败的问题**
@@ -346,7 +336,7 @@
 </details>
 
 <details>
-<summary><b>v1.0.1</b> — 速度全面优化</summary>
+<summary><b>v1.0.1</b> — 速度全面优化（点击展开）</summary>
 
 - ⚡ **BRUSH: Infinity** → 一键刷取时所有任务同时并发
 - ⚡ **REQUEST_TIMEOUT = 10000** → 超时更快
@@ -356,7 +346,7 @@
 </details>
 
 <details>
-<summary><b>v1.0.0</b> — 首发版本</summary>
+<summary><b>v1.0.0</b> — 首发版本（点击展开）</summary>
 
 - 🎉 整合 风月同天🌸 & 志成🍥 双作者方案
 - 🧩 新增子母题型/混合题型完整支持
@@ -369,6 +359,7 @@
 </details>
 
 ---
+
 
 ## 🐛 已知问题与状态
 
@@ -514,7 +505,7 @@ A：v1.0.5 已将公式图片链接从 http 升级为 https，修复了 https �
 ### 📁 项目结构
 
 ```
-升学e网通-学习助手opt.user.js（约 118KB / 2400+ 行）
+升学e网通-学习助手opt.user.js（约 118KB / 2500+ 行）
 ├── 🏷️ 元信息（@name / @version / @match / @grant）
 ├── ⚙️ 配置区（BIZ 题型码 / 超时 / 重试 / 并发 / 请求头）
 ├── 🧰 工具函数
@@ -571,7 +562,7 @@ A：v1.0.5 已将公式图片链接从 http 升级为 https，修复了 https �
 | --- | --- | --- |
 | 🌸 风月同天 | 脚本参考 & UI 设计 | [博客](https://www.zkzxgzb.com/news/blog/bdcd86c) · [TG机器人](https://t.me/ewtkillbot) · [GitHub](https://github.com/ZZ0YY/EWT-TOOL) · [Greasy Fork](https://greasyfork.org/zh-CN/scripts/587786) |
 | 🍥 志成 | 答案获取核心 | [主页](https://zhicheng233.top) · [博客](https://blog.zhicheng233.top) · [GitHub](https://github.com/zhicheng233/GetEWTAnswers) · [Greasy Fork](https://greasyfork.org/zh-CN/scripts/524802) |
-| ⚡ Zoan | 整合优化 & 混合题型 | [QQ](https://qm.qq.com/cgi-bin/qm/qr?k=Ok_Wy_7bW0yMS9MrXLOp8PW0Ci0Gcn9A) · [Gmail](mailto:zoan0404@gmail.com) · [脚本主页](https://greasyfork.org/zh-CN/scripts/591258) |
+| ⚡ Zoan | 整合优化 & 混合题型 | [QQ](https://qm.qq.com/cgi-bin/qm/qr?k=Ok_Wy_7bW0yMS9MrXLOp8PW0Ci0Gcn9A) · [Gmail](mailto:zoan0404@gmail.com) ·[GitHub](https://github.com/Zoan0404/ewt360-study-helper) · [Greay Fork](https://greasyfork.org/zh-CN/scripts/591258) |
 
 ---
 
@@ -588,11 +579,6 @@ A：v1.0.5 已将公式图片链接从 http 升级为 https，修复了 https �
 如果觉得好用，欢迎请作者喝杯咖啡 ☕ 你的支持是持续维护的最大动力！
 
 ![微信赞赏码](https://raw.githubusercontent.com/Zoan0404/ewt360-study-helper/main/wechat_reward.png)
-
-> 💡 要在 **Greasy Fork 发布页**展示赞赏图：请先把微信赞赏码图上传到图床（如 [sm.ms](https://sm.ms)、[GitHub Raw](https://raw.githubusercontent.com) 或 QQ 相册直链），取得可访问的图片 URL 后，在上方赞赏二维码位置替换该图片地址即可正常渲染（仓库内素材：https://github.com/Zoan0404/ewt360-study-helper/blob/main/wechat_reward.png ）。
-
-***
-
 
 ---
 

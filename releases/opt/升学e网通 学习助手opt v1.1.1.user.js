@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         升学e网通 学习助手opt
 // @namespace    ewt360-sdudy-helper-opt
-// @version      1.1.0
+// @version      1.1.1
 // @author       风月同天🌸 & 志成🍥 (optimized by ⚡Zoan)
 // @description  采用志成🍥 的答案获取与风月同天🌸 的脚本参考及UI页面,由⚡Zoan进行整合并支持子母题型 混合题型 并且提供扫描功能,支持检测完成状态,优化提交功能,支持查看答案,进一步优化速度 
 // @license      ISC
@@ -23,11 +23,16 @@
 
     const BASE = "https://gateway.ewt360.com";
     const UA = "Mozilla/5.0";
-    // 207 = 校本试卷（作业提交入口/校本 卡片任务）：独立报告空间，与客观题试卷(205)/课后习题(204)不同。
-    //   - 总任务页返回 contentTypeName 常为「校本试卷」，独立卡片携带真实 paperId，
-    //     此前被判为 205 并用 205 通道刷 → 服务器 207 空间不识别 → 总任务页刷不进；
-    //     进具体试卷页 URL 自带 bizCode=207 才能正确刷。加 207 分支后总任务页即可正确识别。
-    const BIZ = { EXERCISE: "204", PAPER: "205", VIEW: "201", CUSTOM: "207" };
+    const BIZ = {
+        EXERCISE: "204",  // 课后习题（reAnswerPaper 可重做）
+        PAPER:    "205",  // 独立试卷（成绩固化）
+        PAPER2:   "206",  // 试卷 B端变体（与 205 同链路，实测可刷）
+        VIEW:     "201",  // 查看态（锁卷专用）
+        CUSTOM:   "207"   // 校本试卷（作业提交入口，空卷+自批）
+    };
+    const UNIFIED_SUBMIT_CODES = [BIZ.EXERCISE, BIZ.PAPER, BIZ.PAPER2, BIZ.CUSTOM];
+    const RETRYABLE_CODES = [BIZ.EXERCISE];
+    const URL_BIZ_CONTENT_TYPES = [2];
     const HOMEWORK_STATUSES = [1, 2, 3];
     const REQUEST_TIMEOUT = 10000;              // 优化：降低超时
     const RETRY_COUNT = 2;
@@ -78,7 +83,6 @@
         const code = Number(task?.contentTypeCode);
         const title = (task?.title || "").toLowerCase();
         const rawBiz = String(task?.bizCode ?? "");
-        // 207 = 校本试卷（作业提交入口/校本卡片，独立卡片+独立报告空间）
         const isSchool = name.includes("校本") || name.includes("作业提交") || title.includes("作业提交入口") ||
                          code === 207 || rawBiz === "207";
         if (isSchool) {
@@ -122,8 +126,6 @@
     function gmFetch(method, url, headers, data) {
         return new Promise((resolve, reject) => {
             const startTime = Date.now();
-            // 合并公共请求头（调用方显式传入的 header 优先），确保 content-type / Origin / Ewt-* 等
-            // 网关必备头存在，否则服务器返回 415「不支持此种类型的请求」
             const finalHeaders = { ...COMMON_HEADERS, ...(headers || {}) };
             GM_xmlhttpRequest({
                 method, url,
@@ -221,7 +223,6 @@
         const reportId = params.get("reportId") || "0";
         let bizCode = BIZ.PAPER;
         if (params.has("bizCode")) bizCode = params.get("bizCode");
-        // 置 null 交给 loadPapers 探测（204 习题 / 205 试卷），避免用错类型取答案
         if (bizCode === BIZ.VIEW) {
             console.warn("[直接识别] URL bizCode=201（VIEW浏览码），忽略并在 loadPapers 中探测真实作答类型");
             bizCode = null;
@@ -344,8 +345,8 @@
                         const paperId = String(task.contentId);
                         if (!paperId || paperId === "0") continue;
                         const done = task.finished === true;
-                        // 校本(207)使用该任务自身 code，避免被错误归并到 205；常规试卷保持 205
-                        const bizCode = inferred.bizCode || BIZ.PAPER;
+                        const urlBiz = (String(task.contentUrl || '').match(/bizCode=(\d+)/) || [])[1];
+                        const bizCode = urlBiz || inferred.bizCode || BIZ.PAPER;
                         result.push({
                             homeworkId: hid,
                             homeworkTitle: homework.homeworkTitle || homework.title || `作业 #${hid}`,
@@ -363,7 +364,6 @@
                             lessonIdList.push(contentId);
                             taskIds.push(String(task.taskId));
                             taskMap[contentId] = task;
-                            // v1.1.0 排序修复：先占位保持服务器真实顺序（查询返回后回填此下标）
                             lessonSlot[contentId] = result.length;
                             result.push(null);
                         }
@@ -395,7 +395,6 @@
                         const done = studyTest.finishStatus === 1;
                         let type = "习题";
                         let bizCode = BIZ.EXERCISE;
-                        // 校本试卷(207)：studyTest.bizCode=207 或底层 task 判为校本 → 独立 CUSTOM 通道
                         let isSchoolType = String(studyTest.bizCode ?? "") === BIZ.CUSTOM;
                         if (!isSchoolType && task) isSchoolType = (inferPaperType(task).type === "校本");
                         if (isSchoolType) {
@@ -417,7 +416,6 @@
                             dayLabel, dayDate: day.date || null,
                             type, done, brushing: false
                         };
-                        // v1.1.0 排序修复：回填到占位下标（保持服务器真实顺序），无占位则追加
                         const slot = lessonSlot[lessonId];
                         if (slot !== undefined && result[slot] === null) result[slot] = entry;
                         else result.push(entry);
@@ -446,7 +444,6 @@
         text = text.replace(/<img[^>]*Wirisformula[^>]*src="([^"]*)"[^>]*>/g, '<img src="$1" />');
         text = text.replace(/<br[^>]*>/g, '\n');
         text = text.replace(/<(?!img\b|\/img\b|b\b|\/b\b|u\b|\/u\b|i\b|\/i\b|strong\b|\/strong\b|em\b|\/em\b)[^>]+>/g, '');
-        // 安全加固：剥离 img 标签上的事件属性(on*)与 javascript: 协议，防 XSS
         text = text.replace(/<img[^>]*>/gi, (m) =>
             m.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
              .replace(/\s+src\s*=\s*"[^"]*javascript:[^"]*"/gi, ' src=""')
@@ -593,10 +590,6 @@
     }
 
     // ---------- 官方「重新作答」接口（reAnswerPaper） ----------
-    //   - 仅 bizCode=204（课后习题）可用：POST body={reportId:旧报告} → 返回新报告ID，
-    //     重刷后任务入口（如「练」按钮）会自动绑定最新报告（用户实机观察并验证）。
-    //   - bizCode=205（试卷）返回 7771522「该场景不支持再次作答」，任务绑定固化无法改写。
-    // 用法：对「已完成报告」调用，返回「未完成」的新报告，用于提交满分答案。
     async function reAnswerPaper(reportId, token) {
         const url = `${BASE}/api/answerprod/web/answer/reAnswerPaper`;
         const data = await gmRequest("POST", url, { reportId });
@@ -651,20 +644,11 @@
     }
 
     // ---------- webreport 全量答案接口（1 次 GET 拿全卷答案+解析，替代逐题 analysis） ----------
-    //   - bizCode=204（课后习题）：GET /api/answerprod/web/answer/webreport?platform=1&reportId=xxx&userId=xxx&bizCode=204
-    //     → data.questions[] 平铺数组，每题含 rightAnswer/analyse/myAnswer/rightStatus/knowledges/childQuestions；
-    //       questions.length 即卷面题数（复合题计 1 题，实测含 5 子题的复合题 + 1 简答 = 2）
-    //   - bizCode=205（试卷）：GET /api/answerprod/web/answer/webreport/questionGroup?paperId=xxx&reportId=xxx&platform=1&bizCode=205&homeworkId=xxx&userId=xxx
-    //     → data.groups[] 题组嵌套，展开 groups 后每题同样全量（含子题答案/解析）；groups 展开前计数即卷面题数
-    //   - data.title 即试题名称；复合题父题 rightAnswer=[]/analyse=""，答案全部在 childQuestions 子题中
-    // 说明：仅报告已完成（finish=true）才返回完整答案；任何异常/空数据返回 null，由调用方回退 getQuestions+getAnswer 逐题方案
     async function getWebReportAnswers(paper, reportId, bizCode, token) {
         try {
             const userId = await getUserId();
             let raw = null;
-            // 205 试卷 与 207 校本试卷 都用题组嵌套结构（URL 带 paperId + homeworkId）
-            if (bizCode === BIZ.PAPER || bizCode === BIZ.CUSTOM) {
-                // 205 试卷：题组嵌套结构（URL 带 paperId + homeworkId）
+            if (UNIFIED_SUBMIT_CODES.includes(bizCode) && bizCode !== BIZ.EXERCISE) {
                 const url = `${BASE}/api/answerprod/web/answer/webreport/questionGroup?paperId=${paper.paperId}&reportId=${reportId}&platform=1&bizCode=${bizCode}&homeworkId=${paper.homeworkId || '0'}&userId=${userId}`;
                 raw = await gmRequest("GET", url, null);
                 const questions = [];
@@ -676,7 +660,6 @@
                 }
                 raw = { ...(raw || {}), questions };
             } else {
-                // 204 习题：平铺结构（URL 不带 paperId/homeworkId）
                 const url = `${BASE}/api/answerprod/web/answer/webreport?platform=1&reportId=${reportId}&userId=${userId}&bizCode=${bizCode}`;
                 raw = await gmRequest("GET", url, null);
             }
@@ -685,7 +668,6 @@
                 console.warn('[webreport] 返回题目为空，回退逐题 analysis');
                 return null;
             }
-            // 归一化：webreport 用 id 字段，现有组装循环用 questionId（子题同理）；cate 复制到 cateId
             const normalize = (q) => {
                 if (q.id != null && q.questionId == null) q.questionId = q.id;
                 if (q.cate != null && q.cateId == null) q.cateId = q.cate;
@@ -704,7 +686,6 @@
                 return q;
             };
             questions.forEach(normalize);
-            // 可作 getPaperInfo 失败时的兜底数据源
             const title = raw?.title || '';
             const questionCount = questions.length;
             console.log(`[webreport] ✅ 1 次请求获取全卷答案成功：${questionCount} 题${title ? `，名称「${title}」` : ''}（子题由渲染层分组显示）`);
@@ -738,24 +719,14 @@
     }
 
     // ============ v1.1.0：201 通道锁卷（核心防污染升级） ============
-    // 【实测依据】同一 paperId 在不同 bizCode 下各自维护独立报告空间：
-    //   - 205 空间被任务原报告占住时，initReport('0') 会复用原报告（锁卷即污染原报告）；
-    //   - 201（查看态）空间为空 → GET /report?bizCode=201 查询即创建全新无主报告，
-    //     不归属任何作业（响应无 homeworkId 字段），锁它绝不影响任务成绩。
-    // 因此锁卷载体从 205 迁移到 201：先取/创建 201 报告 → 锁 201 报告 → finish=true 作答案源。
-    // 【安全边界】本函数返回的 201 报告仅作答案源，禁止用于提交满分答案。
     async function lockReport201(paperId, token) {
-        // ① 取/创建 201 查看态报告（查询即创建，无主不绑任务）
         const lockId = await getReportId(paperId, BIZ.VIEW, token);
         if (!lockId || lockId === '0') throw new Error('201通道取报告失败');
-        // ② 双保险归属复核：若 201 报告竟绑定真实作业（异常场景），放弃锁卷
         const lockSt = await getReportStatus(paperId, lockId, BIZ.VIEW, token);
         if (lockSt && lockSt.homeworkId !== undefined && String(lockSt.homeworkId) !== '0') {
             throw new Error(`201报告归属异常 homeworkId=${lockSt.homeworkId}，放弃锁卷`);
         }
-        // ③ 已完成则无需再锁
         if (lockSt && lockSt.finish === true) return lockId;
-        // ④ 锁卷：submitpaper + homeworkId='0'（bizCode=201，与任务成绩空间完全隔离）
         await updateReport(paperId, lockId, BIZ.VIEW, '1', token);
         console.log(`[锁卷201] 已锁定查看态报告 ${lockId}（bizCode=201，不触碰任务原报告）`);
         return lockId;
@@ -808,7 +779,6 @@
             answers.push(item);
         }
 
-        // 禁止空卷提交：没有任何有效答案时直接中止，不再执行交卷/自批
         if (!answers.length) {
             throw new Error("未获取到任何有效答案，已禁止提交空卷（请检查试卷或稍后重试）");
         }
@@ -850,7 +820,6 @@
         `;
         const title = document.createElement('span');
         const displayTitle = paperTitle || '试题';
-        // 不再用展开后的 results.length（会把复合题子题误算成独立题目）
         const displayCount = (typeof totalCount === 'number' && totalCount > 0) ? totalCount : results.length;
         title.textContent = `📝 ${displayTitle} 答案 (共 ${displayCount} 题)`;
         title.style.cssText = `flex: 1; word-wrap: break-word; white-space: normal; padding-right: 12px;`;
@@ -931,7 +900,6 @@
         modal.appendChild(body);
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
-        // 显示动画
         requestAnimationFrame(() => {
             overlay.style.opacity = '1';
             overlay.style.pointerEvents = 'auto';
@@ -961,7 +929,6 @@
         console.log(`paperId=${paper.paperId}, bizCode=${paper.bizCode}, homeworkId=${paper.homeworkId}`);
         const token = getToken();
         try {
-            // v1.1.0：锁卷前记录「任务已绑定报告」——用于二级兜底时识别 initReport 是否复用了原报告（复用即污染，必须放弃）
             let boundReportId = null;
             try {
                 const br = await getReportId(paper.paperId, paper.bizCode, token);
@@ -969,14 +936,11 @@
             } catch (e) { boundReportId = null; }
             if (boundReportId) console.log(`[获取答案] 任务已绑定报告 reportId=${boundReportId}`);
 
-            // ① 选择答案源报告（已完成报告才支持取答案）
             let answerReportId = null;
             const candidates = [];
-            // 优先：URL 上的 reportId（当前页面报告的答卷页，通常是已完成报告）
             if (paper.reportId && paper.reportId !== '0' && paper.reportId !== 'undefined') {
                 candidates.push({ id: String(paper.reportId), src: 'URL' });
             }
-            // 次选：getReportId() 无参查询返回的最新报告
             candidates.push({ id: 'LATEST', src: 'getReportId' });
             candidates.push({ id: 'VIEW', src: 'getReportId-201' });
 
@@ -1002,17 +966,13 @@
                 }
             }
 
-            // 兜底：无已完成报告 → v1.1.0 锁卷载体迁移到 201 通道（查看态报告查询即创建、无主不绑任务），
-            // 绝不在 205 空间 initReport('0')——205 空间被原报告占住时该调用会复用原报告，锁卷即污染真实成绩
             if (!answerReportId) {
                 try {
-                    // v1.1.0：201 通道锁卷（bizCode=201 报告与任务成绩空间完全隔离）
                     answerReportId = await lockReport201(paper.paperId, token);
                     console.log(`[获取答案] 无已完成报告，201通道锁卷报告 ${answerReportId} 换取答案（不污染任务成绩）`);
                 } catch (e) {
                     console.warn('[获取答案] 201通道锁卷失败:', e.message);
                 }
-                // v1.1.0 二级兜底：201 也失败 → 205 空间归属检测后锁卷（双重防线）
                 if (!answerReportId) {
                     try {
                         const lockId = await initReport(paper.paperId, '0', paper.bizCode, '1', token);
@@ -1070,8 +1030,6 @@
                 traverseQuestions(paperInfo.questions);
                 collectChildNo(paperInfo.questions);
             }
-            // 锁卷兜底报告已在上面完成锁卷，此处不再重复锁卷
-            // 失败或返回空自动回退 getQuestions + getAnswer 逐题并发方案
             let questions = null;
             let allAnswers = null;
             const webReport = await getWebReportAnswers(paper, answerReportId, paper.bizCode, token);
@@ -1080,11 +1038,9 @@
                 allAnswers = questions.map(q => ({ question: q, answer: q }));
             } else {
                 questions = await getQuestions(paper.paperId, answerReportId, '1', paper.bizCode, token);
-                // 答案查看：题目列表为空时提前提示，避免空白弹窗
                 if (!questions || !questions.length) {
                     throw new Error("未获取到题目列表（可能是新试卷或接口异常）");
                 }
-                // 并发获取答案
                 allAnswers = await mapLimit(questions, CONCURRENCY.ANSWER, async (q) => {
                     const ans = await getAnswer(paper.paperId, answerReportId, q.questionId, paper.bizCode, '1', token);
                     return ans ? { question: q, answer: ans } : null;
@@ -1099,8 +1055,6 @@
                 const childQs = ans.childQuestions || [];
                 const parentRight = ans.rightAnswer || [];
                 if (childQs.length > 0 && parentRight.length === 0) {
-                    // 题型显示用 analysis 返回的 subjectQuestionTypeName（如「通用复合题」），
-                    // 不能用 q.groupName（那是题组名，如卷面全为单选题时组名也是「单选题」）
                     const groupName = ans.subjectQuestionTypeName || q.groupName;
                     const subResults = childQs.map((child, childIdx) => {
                         const childId = child.questionId;
@@ -1155,7 +1109,6 @@
                 } else {
                     const fullScore = fullScoreMap.get(q.questionId) || 0;
                     const opts = extractOpts(ans.rightAnswer || []);
-                    // 不能用多空题格式（1、C;2、D;）——通过题型名判断（analysis 返回或题组名）
                     const isMultiChoice = /多选|不定项/.test((ans.subjectQuestionTypeName || '') + ' ' + (q.groupName || ''));
                     let answerStr;
                     if (opts.length) {
@@ -1762,7 +1715,6 @@
         tabs.appendChild(tabAbout);
         panel.appendChild(tabs);
 
-        // 主视图：任务列表
         const mainView = document.createElement("div");
         mainView.className = "eph-view active";
         mainView.id = "eph-view-main";
@@ -1784,8 +1736,6 @@
         toolbar.appendChild(stopBtn);
         mainView.appendChild(toolbar);
 
-        // 仅对习题有效：204课后习题走官方 reAnswerPaper 重做（绑定自动更新）；
-        // 205试卷任务成绩固化，重刷仅生成满分报告，无法改写任务成绩
         const redoBar = document.createElement("div");
         redoBar.className = "eph-toolbar";
         redoBar.style.cssText = "padding:6px 16px 10px;gap:6px;flex-wrap:wrap;";
@@ -1799,7 +1749,6 @@
         redoCheck.style.cssText = "accent-color:#1677ff;width:14px;height:14px;";
         redoCheck.addEventListener("change", () => {
             forceRedo = redoCheck.checked;
-            // 重新渲染当前列表，使已完成任务的按钮变为「重做」可点
             if (typeof groupsCache !== "undefined" && groupsCache.length) {
                 renderPaperList(listContainer, groupsCache, cbs.onBrushPaper || brushPaper);
             }
@@ -1864,7 +1813,6 @@
         mainView.appendChild(listContainer);
         panel.appendChild(mainView);
 
-        // 答案视图
         const answerView = document.createElement("div");
         answerView.className = "eph-view";
         answerView.id = "eph-view-answer";
@@ -1873,7 +1821,6 @@
         answerView.appendChild(answerContainer);
         panel.appendChild(answerView);
 
-        // 关于视图
         const aboutView = document.createElement("div");
         aboutView.className = "eph-view";
         aboutView.id = "eph-view-about";
@@ -1881,23 +1828,22 @@
         aboutContent.className = "eph-about";
         aboutContent.innerHTML = `
           <div class="eph-about-avatar">🌸</div>
-          <div class="eph-about-name">升学e网通 学习助手opt <span style="font-size:12px;color:#a78bfa;font-weight:600;">v1.1.0</span></div>
+          <div class="eph-about-name">升学e网通 学习助手opt <span style="font-size:12px;color:#a78bfa;font-weight:600;">v1.1.1</span></div>
           <div class="eph-about-desc">支持一键获取E网通试卷及习题答案并自动填写提交<br/>全部免费 🆓</div>
           <div class="eph-about-section">
             <h3>📢 使用须知</h3>
             <div class="eph-about-rate-item"><span class="dot"></span> 支持一键提交,提交后自动批改,满分完成</div>
             <div class="eph-about-rate-item"><span class="dot"></span> 支持独立试卷与课程任务,支持独立查看答案</div>
             <div class="eph-about-rate-item"><span class="dot"></span> 使用本工具即代表同意合理使用</div>
-<div class="eph-about-section">
-            <h3>🔥 v1.1.0 重大更新</h3>
-            <div class="eph-about-rate-item"><span class="dot"></span> <b>新增「校本试卷」总任务页刷取通道（bizCode=207）</b>：此前校本试卷只能在具体试卷页刷、总任务页无法刷，现已支持总任务页一键刷取并自动满分</div>
-            <div class="eph-about-rate-item"><span class="dot"></span> 锁卷载体迁移至 201 通道：与任务成绩空间完全隔离，杜绝「时好时坏」污染真实成绩</div>
-            <div class="eph-about-rate-item"><span class="dot"></span> 提交满分前归属复核：服务器复用原报告时立即中止，双重防护任务成绩</div>
-            <div class="eph-about-rate-item"><span class="dot"></span> 答案读取对 205/207 统一走题组嵌套 questionGroup，校本试卷答案可正常获取</div>
-            <div class="eph-about-rate-item"><span class="dot"></span> 任务列表排序修复：课程/试卷按服务器真实顺序展示，不再试卷前置</div>
-            <div class="eph-about-rate-item"><span class="dot"></span> 关于页作者区域增加分隔线、清理冗余中文注释，界面更清晰</div>
+
           </div>
+          <div class="eph-about-section">
+            <h3>✨ v1.1.1 更新内容</h3>
+            <div class="eph-about-rate-item"><span class="dot"></span> <b>统一提交逻辑（重大）</b>：课后习题(204)、独立试卷(205)、试卷变体(206)、校本试卷(207) 统一走「自动填答 → 交卷 → 自批满分」标准三连，一套链路通刷，不再各写各的</div>
+            <div class="eph-about-rate-item"><span class="dot"></span> <b>新增 206 试卷支持</b>：扫描时从任务 contentUrl 提取真实 bizCode，206 试卷不再被误判为 205 提交失败，现已自动识别并满分刷取</div>
+            <div class="eph-about-rate-item"><span class="dot"></span> <b>修复校本试卷(207) 满分提交</b>：207 回归标准三连（主观题自批满分），废弃会判 0 分的空卷提交分支</div>
           </div>
+
 <div class="eph-about-section">
             <h3>👨‍💻 作者团队</h3>
             <div class="eph-about-rate-item"><span class="dot"></span> <strong>🌸 风月同天</strong> — 原始脚本参考 &amp; UI设计</div>
@@ -1977,7 +1923,6 @@
                     img.alt = "微信赞赏码";
                     img.style.cssText = "width:100%; max-width:330px; height:auto; border-radius:12px; margin:8px auto; display:block; cursor:zoom-in;";
                     img.onclick = () => {
-                        // 点击在「紧凑 / 尽量大」间切换
                         img.style.maxWidth = (img.style.maxWidth === "330px") ? "100%" : "330px";
                         img.style.width = (img.style.maxWidth === "100%") ? "100%" : String(window.getComputedStyle(box).width || "330px");
                     };
@@ -1997,7 +1942,6 @@
                     responseType: "blob",
                     timeout: 8000,
                     onload: (res) => {
-                        // blob 只要拿到对象即视为有效
                         if (res.status === 200 && res.response && typeof res.response === "object") {
                             showSrc(URL.createObjectURL(res.response));
                         } else if (url !== REWARD_RAW) {
@@ -2010,7 +1954,6 @@
                     ontimeout: () => { if (url !== REWARD_RAW) fetchQR(REWARD_RAW); else showSrc(REWARD_RAW); }
                 });
             };
-            // 镜像优先，失败自动回退原站；同一把锁保证最多只渲染一张
             if (!fetchQR(REWARD_PROXY)) showSrc(REWARD_RAW);
         }
         tabAbout.addEventListener("click", loadRewardQR, { once: true });
@@ -2037,7 +1980,6 @@
         document.body.appendChild(toggle);
         document.body.appendChild(panel);
 
-        // 默认显示主视图
         showView("eph-view-main");
 
         return {
@@ -2182,7 +2124,6 @@
             try {
                 const paperId = currentTask.paperId;
                 let bizCode = currentTask.bizCode || BIZ.EXERCISE;
-                // 204/205 均探测失败时回退 201（VIEW 浏览码）：该报告在浏览场景下存在，analysis 兼容 201，聊胜于无
                 if (!currentTask.bizCode) {
                     const probeToken = getToken();
                     try {
@@ -2212,7 +2153,7 @@
                 const title = paperInfo.title || "当前任务";
                 const questionCount = paperInfo.questionCount ?? "?";
                 const done = reportInfo ? reportInfo.finish === true : false;
-                const type = (bizCode === BIZ.EXERCISE) ? "习题" : (bizCode === BIZ.CUSTOM ? "校本" : (bizCode === BIZ.PAPER ? "试卷" : "浏览"));
+                const type = (bizCode === BIZ.EXERCISE) ? "习题" : (bizCode === BIZ.CUSTOM ? "校本" : (UNIFIED_SUBMIT_CODES.includes(bizCode)) ? "试卷" : "浏览");
 
                 const paper = { ...currentTask, bizCode, title, questionCount, done, type, brushing: false };
                 const group = { homeworkId, title: "当前任务", papers: [paper] };
@@ -2300,12 +2241,7 @@
         const startTime = Date.now();
         const token = getToken();
         try {
-            //      （新建未完成报告 analysis 返回 rightAnswer:[] / analyse:""）；
-            //      且锁卷报告不参与任务绑定（实测数学卷任务绑定 reportId/score 不变）；
-            //       204 课后习题的提交报告优先走官方 reAnswerPaper（绑定自动更新），失败降级 initReport。
 
-            // ① 选择答案源报告（已完成报告才支持取答案）
-            // 锁卷/创建新报告后 getReportId 会返回最新报告（锁卷报告），必须提前获取
             let boundReportId = null;
             try {
                 const br = await getReportId(paper.paperId, paper.bizCode, token);
@@ -2314,11 +2250,9 @@
             if (boundReportId) console.log(`[刷题] 任务已绑定报告 reportId=${boundReportId}（将作为提交报告，锁卷报告仅作答案源）`);
             let answerReportId = null;
             const candidates = [];
-            // 优先：URL 上的 reportId（当前页面报告的答卷页，通常是已完成报告）
             if (paper.reportId && paper.reportId !== '0' && paper.reportId !== 'undefined') {
                 candidates.push({ id: String(paper.reportId), src: 'URL' });
             }
-            // 次选：getReportId() 无参查询返回的最新报告
             candidates.push({ id: 'LATEST', src: 'getReportId' });
             candidates.push({ id: 'VIEW', src: 'getReportId-201' });
 
@@ -2344,17 +2278,13 @@
                 }
             }
 
-            // 兜底：无已完成报告 → v1.1.0 锁卷载体迁移到 201 通道（与 fetchAndShowAnswers 同步升级），
-            // 205 空间被原报告占住时 initReport('0') 会复用原报告，锁卷即污染——绝不走该路径
             if (!answerReportId) {
                 try {
-                    // v1.1.0：201 通道锁卷（bizCode=201 报告与任务成绩空间完全隔离）
                     answerReportId = await lockReport201(paper.paperId, token);
                     console.log(`[刷题] 无已完成报告，201通道锁卷报告 ${answerReportId} 换取答案（不污染任务成绩）`);
                 } catch (e) {
                     console.warn('[刷题] 201通道锁卷失败:', e.message);
                 }
-                // v1.1.0 二级兜底：201 也失败 → 205 空间锁卷前双重归属检测（复用检测 + fix2 归属回显检测）
                 if (!answerReportId) {
                     try {
                         const lockId = await initReport(paper.paperId, '0', paper.bizCode, '1', token);
@@ -2378,7 +2308,6 @@
                 throw new Error("未获取到答案源报告（既无已完成报告，锁卷兜底也失败），已中止刷取");
             }
 
-            // 获取试卷信息（用于 fullScoreMap / metaMap），使用 paper.bizCode
             const paperInfo = await getPaperInfo(paper.paperId, answerReportId, '1', paper.bizCode, token);
             const fullScoreMap = new Map();
             const metaMap = new Map();
@@ -2399,7 +2328,6 @@
                 traverseQuestions(paperInfo.questions);
             }
 
-            // 失败或返回空自动回退 getQuestions + getAnswer 逐题并发方案（与 fetchAndShowAnswers 保持一致）
             let questions = null;
             let allAnswers = null;
             const webReport = await getWebReportAnswers(paper, answerReportId, paper.bizCode, token);
@@ -2407,15 +2335,12 @@
                 questions = webReport.questions;   // 已归一化 questionId，含全部答案/解析字段
                 allAnswers = questions.map(q => ({ question: q, answer: q }));
             } else {
-                // 锁卷兜底报告已在上面完成锁卷，此处不再重复锁卷
                 questions = await getQuestions(paper.paperId, answerReportId, '1', paper.bizCode, token);
 
-                // 禁止空卷：题目列表为空时提前中止，避免无谓的答案请求与空卷提交
                 if (!questions || !questions.length) {
                     throw new Error("未获取到题目列表，已禁止空卷提交（可能是新试卷或接口异常）");
                 }
 
-                // 并发获取每道题的答案
                 allAnswers = await mapLimit(questions, CONCURRENCY.ANSWER, async (q) => {
                     const ans = await getAnswer(paper.paperId, answerReportId, q.questionId, paper.bizCode, '1', token);
                     return ans ? { question: q, answer: ans } : null;
@@ -2539,21 +2464,16 @@
 
             fixGroupAnswers(expandedResults);
 
-            // 空卷保护：未获取到任何题目/答案时中止提交，避免提交空卷
             if (!expandedQuestions.length || !expandedResults.length) {
                 throw new Error("未获取到任何题目/答案，已中止提交（避免提交空卷）");
             }
 
-            // ② 创建提交报告（与答案来源分离；答案提交用独立新报告，避免锁卷后提交被丢弃）
-            // reAnswerPaper 会转移旧报告「作答权」，若先调用可能使答案源旧报告失效（实测题2答案变空）
             let submitReportId = null;
-            // 锁卷报告仅作答案源用完即弃；即使部分试卷锁卷报告被服务器绑定，成绩仍由原报告决定，杜绝污染
             if (boundReportId && String(boundReportId) !== String(answerReportId)) {
                 submitReportId = boundReportId;
                 console.log(`[刷题] 使用任务已绑定报告 ${submitReportId} 提交（原报告答题，锁卷报告仅作答案源）`);
             }
-            // 205（试卷）服务器返回 7771522「该场景不支持再次作答」，自动降级 initReport
-            if (!submitReportId && paper.bizCode === BIZ.EXERCISE && answerReportId) {
+            if (!submitReportId && RETRYABLE_CODES.includes(paper.bizCode) && answerReportId) {
                 try {
                     submitReportId = await reAnswerPaper(answerReportId, token);
                     console.log(`[刷题] 204习题走官方重做通道 reAnswerPaper，新报告 ${submitReportId}（绑定将自动更新）`);
@@ -2563,20 +2483,18 @@
             }
             if (!submitReportId) {
                 submitReportId = await initReport(paper.paperId, paper.homeworkId, paper.bizCode, '1', token);
-                // v1.1.0：提交报告归属复核——若 initReport 复用了任务原报告（服务器在活跃会话占用时会如此），
-                // 拿它提交满分 = 直接改写原报告成绩（"时好时坏"污染的根源），必须中止保护真实成绩
                 if (boundReportId && String(submitReportId) === String(boundReportId)) {
                     throw new Error(`initReport复用任务原报告 ${submitReportId}，禁止提交满分（避免污染真实成绩），已中止`);
                 }
             }
 
-            // 提交时传入 submitReportId
+            // ===== 统一提交链（204/205/206/207 完全共用） =====
             await submitAllAndCorrect(paper.paperId, '1', paper.bizCode, expandedQuestions, expandedResults, paper.homeworkId, token, submitReportId);
 
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             console.log(`[刷题] ✅ 提交完成 (耗时 ${elapsed}s): ${paper.title}`);
             let doneMsg = `《${paper.title}》已提交 (${elapsed}s)`;
-            if (paper.done && paper.bizCode === BIZ.PAPER) {
+            if (paper.done && (paper.bizCode === BIZ.PAPER || paper.bizCode === BIZ.PAPER2)) {
                 doneMsg = `《${paper.title}》已生成新满分报告，但已完成试卷任务成绩固化（服务器限制），任务成绩不会更新`;
                 console.warn(`[刷题] ⚠️ ${doneMsg}`);
             }
@@ -2633,7 +2551,7 @@
             }
         });
         panel.show();
-        console.log("[EWT Helper] 已启动，版本 v1.1.0");
+        console.log("[EWT Helper] 已启动，版本 v1.1.1");
         loadPapers().catch(e => {
             if (e instanceof TokenExpiredError) {
                 console.error("[登录过期]", e.message);

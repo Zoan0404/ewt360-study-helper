@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         升学e网通 试卷及习题助手
-// @namespace    ewt360-study-helper-opt
-// @version      1.1.0
+// @name         升学e网通 学习助手opt
+// @namespace    ewt360-sdudy-helper-opt
+// @version      1.1.1
 // @author       风月同天🌸 & 志成🍥 (optimized by ⚡Zoan)
-// @description  采用志成🍥 的答案获取与风月同天🌸 的脚本参考及UI页面，由⚡Zoan进行整合并支持子母题型 混合题型 并且提供扫描功能，支持检测完成状态，完成禁止再次刷，优化提交功能，进一步优化速度 
+// @description  采用志成🍥 的答案获取与风月同天🌸 的脚本参考及UI页面,由⚡Zoan进行整合并支持子母题型 混合题型 并且提供扫描功能,支持检测完成状态,优化提交功能,支持查看答案,进一步优化速度 
 // @license      ISC
 // @match        https://web.ewt360.com/*
 // @match        https://teacher.ewt360.com/*
@@ -23,15 +23,20 @@
 
     const BASE = "https://gateway.ewt360.com";
     const UA = "Mozilla/5.0";
-    // 207 = 校本试卷（作业提交入口/校本 卡片任务）：独立报告空间，与客观题试卷(205)/课后习题(204)不同。
-    //   - 总任务页返回 contentTypeName 常为「校本试卷」，独立卡片携带真实 paperId，
-    //     此前被判为 205 并用 205 通道刷 → 服务器 207 空间不识别 → 总任务页刷不进；
-    //     进具体试卷页 URL 自带 bizCode=207 才能正确刷。加 207 分支后总任务页即可正确识别。
-    const BIZ = { EXERCISE: "204", PAPER: "205", VIEW: "201", CUSTOM: "207" };
+    const BIZ = {
+        EXERCISE: "204",  // 课后习题（reAnswerPaper 可重做）
+        PAPER:    "205",  // 独立试卷（成绩固化）
+        PAPER2:   "206",  // 试卷 B端变体（与 205 同链路，实测可刷）
+        VIEW:     "201",  // 查看态（锁卷专用）
+        CUSTOM:   "207"   // 校本试卷（作业提交入口，空卷+自批）
+    };
+    const UNIFIED_SUBMIT_CODES = [BIZ.EXERCISE, BIZ.PAPER, BIZ.PAPER2, BIZ.CUSTOM];
+    const RETRYABLE_CODES = [BIZ.EXERCISE];
+    const URL_BIZ_CONTENT_TYPES = [2];
     const HOMEWORK_STATUSES = [1, 2, 3];
     const REQUEST_TIMEOUT = 10000;              // 优化：降低超时
     const RETRY_COUNT = 2;
-    const CONCURRENCY = { BRUSH: Infinity, ANSWER: 15, SCAN: 3 };
+    const CONCURRENCY = { BRUSH: Infinity, ANSWER: 15, SCAN: 3 };   // 优化：BRUSH 一次全部刷完
 
     function getToken() {
         const m = document.cookie.match(/(?:^|;\s*)token=([^;]+)/);
@@ -78,7 +83,6 @@
         const code = Number(task?.contentTypeCode);
         const title = (task?.title || "").toLowerCase();
         const rawBiz = String(task?.bizCode ?? "");
-        // 207 = 校本试卷（作业提交入口/校本卡片，独立卡片+独立报告空间）
         const isSchool = name.includes("校本") || name.includes("作业提交") || title.includes("作业提交入口") ||
                          code === 207 || rawBiz === "207";
         if (isSchool) {
@@ -122,8 +126,6 @@
     function gmFetch(method, url, headers, data) {
         return new Promise((resolve, reject) => {
             const startTime = Date.now();
-            // 合并公共请求头（调用方显式传入的 header 优先），确保 content-type / Origin / Ewt-* 等
-            // 网关必备头存在，否则服务器返回 415「不支持此种类型的请求」
             const finalHeaders = { ...COMMON_HEADERS, ...(headers || {}) };
             GM_xmlhttpRequest({
                 method, url,
@@ -221,7 +223,6 @@
         const reportId = params.get("reportId") || "0";
         let bizCode = BIZ.PAPER;
         if (params.has("bizCode")) bizCode = params.get("bizCode");
-        // 置 null 交给 loadPapers 探测（204 习题 / 205 试卷），避免用错类型
         if (bizCode === BIZ.VIEW) {
             console.warn("[直接识别] URL bizCode=201（VIEW浏览码），忽略并在 loadPapers 中探测真实作答类型");
             bizCode = null;
@@ -344,8 +345,8 @@
                         const paperId = String(task.contentId);
                         if (!paperId || paperId === "0") continue;
                         const done = task.finished === true;
-                        // 校本(207)使用该任务自身 code，避免被错误归并到 205；常规试卷保持 205
-                        const bizCode = inferred.bizCode || BIZ.PAPER;
+                        const urlBiz = (String(task.contentUrl || '').match(/bizCode=(\d+)/) || [])[1];
+                        const bizCode = urlBiz || inferred.bizCode || BIZ.PAPER;
                         result.push({
                             homeworkId: hid,
                             homeworkTitle: homework.homeworkTitle || homework.title || `作业 #${hid}`,
@@ -363,7 +364,6 @@
                             lessonIdList.push(contentId);
                             taskIds.push(String(task.taskId));
                             taskMap[contentId] = task;
-                            // v1.1.0 排序修复：先占位保持服务器真实顺序（查询返回后回填此下标）
                             lessonSlot[contentId] = result.length;
                             result.push(null);
                         }
@@ -395,7 +395,6 @@
                         const done = studyTest.finishStatus === 1;
                         let type = "习题";
                         let bizCode = BIZ.EXERCISE;
-                        // 校本试卷(207)：studyTest.bizCode=207 或底层 task 判为校本 → 独立 CUSTOM 通道
                         let isSchoolType = String(studyTest.bizCode ?? "") === BIZ.CUSTOM;
                         if (!isSchoolType && task) isSchoolType = (inferPaperType(task).type === "校本");
                         if (isSchoolType) {
@@ -417,7 +416,6 @@
                             dayLabel, dayDate: day.date || null,
                             type, done, brushing: false
                         };
-                        // v1.1.0 排序修复：回填到占位下标（保持服务器真实顺序），无占位则追加
                         const slot = lessonSlot[lessonId];
                         if (slot !== undefined && result[slot] === null) result[slot] = entry;
                         else result.push(entry);
@@ -442,13 +440,16 @@
     // ---------- 脚本辅助函数 ----------
     const cleanHtmlKeepImg = (text) => {
         if (!text) return '';
-        // XSS 加固：剥离所有 on* 事件属性（onclick/onerror/onload 等）
-        text = text.replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
-        // XSS 加固：剥离 javascript: 协议链接
-        text = text.replace(/(href|src)\s*=\s*("|')javascript:[^"']*("|')/gi, '$1=$2$3');
+        text = text.replace(/src="http:\/\/file\.ewt360\.com\//g, 'src="https://file.ewt360.com/');
         text = text.replace(/<img[^>]*Wirisformula[^>]*src="([^"]*)"[^>]*>/g, '<img src="$1" />');
         text = text.replace(/<br[^>]*>/g, '\n');
         text = text.replace(/<(?!img\b|\/img\b|b\b|\/b\b|u\b|\/u\b|i\b|\/i\b|strong\b|\/strong\b|em\b|\/em\b)[^>]+>/g, '');
+        text = text.replace(/<img[^>]*>/gi, (m) =>
+            m.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+             .replace(/\s+src\s*=\s*"[^"]*javascript:[^"]*"/gi, ' src=""')
+             .replace(/\s+src\s*=\s*'[^']*javascript:[^']*'/gi, " src=''")
+             .replace(/\s+src\s*=\s*[^"'\s>]+javascript:[^"'\s>]*/gi, ' src=""')
+        );
         text = text.replace(/&ldquo;/g, '\u201c').replace(/&rdquo;/g, '\u201d');
         text = text.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
         text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
@@ -529,7 +530,7 @@
             return data || {};
         } catch (e) {
             console.warn('[报告状态] 获取异常:', e.message);
-            return null;   // null 表示「未知」，调用方需区分「未完成」与「未知」
+            return null;   // null 表示获取失败，调用方需区分"未完成"与"未知"
         }
     }
 
@@ -589,10 +590,6 @@
     }
 
     // ---------- 官方「重新作答」接口（reAnswerPaper） ----------
-    //   - 仅 bizCode=204（课后习题）可用：POST body={reportId:旧报告} → 返回新报告ID，
-    //     重刷后任务入口（如「练」按钮）会自动绑定最新报告（用户实机观察并验证）。
-    //   - bizCode=205（试卷）返回 7771522「该场景不支持再次作答」，任务绑定固化无法改写。
-    // 用法：对「已完成报告」调用，返回「未完成」的新报告，用于提交满分答案。
     async function reAnswerPaper(reportId, token) {
         const url = `${BASE}/api/answerprod/web/answer/reAnswerPaper`;
         const data = await gmRequest("POST", url, { reportId });
@@ -647,20 +644,11 @@
     }
 
     // ---------- webreport 全量答案接口（1 次 GET 拿全卷答案+解析，替代逐题 analysis） ----------
-    //   - bizCode=204（课后习题）：GET /api/answerprod/web/answer/webreport?platform=1&reportId=xxx&userId=xxx&bizCode=204
-    //     → data.questions[] 平铺数组，每题含 rightAnswer/analyse/myAnswer/rightStatus/knowledges/childQuestions；
-    //       questions.length 即卷面题数（复合题计 1 题，实测含 5 子题的复合题 + 1 简答 = 2）
-    //   - bizCode=205（试卷）：GET /api/answerprod/web/answer/webreport/questionGroup?paperId=xxx&reportId=xxx&platform=1&bizCode=205&homeworkId=xxx&userId=xxx
-    //     → data.groups[] 题组嵌套，展开 groups 后每题同样全量（含子题答案/解析）；groups 展开前计数即卷面题数
-    //   - data.title 即试题名称；复合题父题 rightAnswer=[]/analyse=""，答案全部在 childQuestions 子题中
-    // 说明：仅报告已完成（finish=true）才返回完整答案；任何异常/空数据返回 null，由调用方回退 getQuestions+getAnswer 逐题方案
     async function getWebReportAnswers(paper, reportId, bizCode, token) {
         try {
             const userId = await getUserId();
             let raw = null;
-            // 205 试卷 与 207 校本试卷 都用题组嵌套结构（URL 带 paperId + homeworkId）
-            if (bizCode === BIZ.PAPER || bizCode === BIZ.CUSTOM) {
-                // 205 试卷：题组嵌套结构（URL 带 paperId + homeworkId）
+            if (UNIFIED_SUBMIT_CODES.includes(bizCode) && bizCode !== BIZ.EXERCISE) {
                 const url = `${BASE}/api/answerprod/web/answer/webreport/questionGroup?paperId=${paper.paperId}&reportId=${reportId}&platform=1&bizCode=${bizCode}&homeworkId=${paper.homeworkId || '0'}&userId=${userId}`;
                 raw = await gmRequest("GET", url, null);
                 const questions = [];
@@ -672,7 +660,6 @@
                 }
                 raw = { ...(raw || {}), questions };
             } else {
-                // 204 习题：平铺结构（URL 不带 paperId/homeworkId）
                 const url = `${BASE}/api/answerprod/web/answer/webreport?platform=1&reportId=${reportId}&userId=${userId}&bizCode=${bizCode}`;
                 raw = await gmRequest("GET", url, null);
             }
@@ -681,7 +668,6 @@
                 console.warn('[webreport] 返回题目为空，回退逐题 analysis');
                 return null;
             }
-            // 归一化：webreport 用 id 字段，现有组装循环用 questionId（子题同理）；cate 复制到 cateId
             const normalize = (q) => {
                 if (q.id != null && q.questionId == null) q.questionId = q.id;
                 if (q.cate != null && q.cateId == null) q.cateId = q.cate;
@@ -700,10 +686,9 @@
                 return q;
             };
             questions.forEach(normalize);
-            // 可作 getPaperInfo 失败时的兜底数据源
             const title = raw?.title || '';
             const questionCount = questions.length;
-            console.log(`[webreport] ✅ 1 次请求获取全卷答案成功：${questionCount} 题${title ? `，名称「${title}」` : ''}`);
+            console.log(`[webreport] ✅ 1 次请求获取全卷答案成功：${questionCount} 题${title ? `，名称「${title}」` : ''}（子题由渲染层分组显示）`);
             return { questions, title, questionCount };
         } catch (e) {
             console.warn('[webreport] 全量答案获取失败，回退逐题 analysis:', e.message);
@@ -725,33 +710,23 @@
                 throw e;
             }
         }
-        const reportId = data?.reportId || data?.report || data?.id;
-        if (!reportId) throw new Error('初始化报告失败: reportId为空');
+        const initRid = data?.reportId || data?.report || data?.id;
+        if (!initRid) throw new Error('初始化报告失败: reportId为空');
         if (data.homeworkId !== undefined && String(data.homeworkId) !== String(homeworkId)) {
             throw new Error(`报告归属异常：请求 homeworkId=${homeworkId}，服务器回显 ${data.homeworkId}（该试卷不支持锁卷，放弃避免污染成绩）`);
         }
-        return reportId;
+        return initRid;
     }
 
     // ============ v1.1.0：201 通道锁卷（核心防污染升级） ============
-    // 【实测依据】同一 paperId 在不同 bizCode 下各自维护独立报告空间：
-    //   - 205 空间被任务原报告占住时，initReport('0') 会复用原报告（锁卷即污染原报告）；
-    //   - 201（查看态）空间为空 → GET /report?bizCode=201 查询即创建全新无主报告，
-    //     不归属任何作业（响应无 homeworkId 字段），锁它绝不影响任务成绩。
-    // 因此锁卷载体从 205 迁移到 201：先取/创建 201 报告 → 锁 201 报告 → finish=true 作答案源。
-    // 【安全边界】本函数返回的 201 报告仅作答案源，禁止用于提交满分答案。
     async function lockReport201(paperId, token) {
-        // ① 取/创建 201 查看态报告（查询即创建，无主不绑任务）
         const lockId = await getReportId(paperId, BIZ.VIEW, token);
         if (!lockId || lockId === '0') throw new Error('201通道取报告失败');
-        // ② 双保险归属复核：若 201 报告竟绑定真实作业（异常场景），放弃锁卷
         const lockSt = await getReportStatus(paperId, lockId, BIZ.VIEW, token);
         if (lockSt && lockSt.homeworkId !== undefined && String(lockSt.homeworkId) !== '0') {
             throw new Error(`201报告归属异常 homeworkId=${lockSt.homeworkId}，放弃锁卷`);
         }
-        // ③ 已完成则无需再锁
         if (lockSt && lockSt.finish === true) return lockId;
-        // ④ 锁卷：submitpaper + homeworkId='0'（bizCode=201，与任务成绩空间完全隔离）
         await updateReport(paperId, lockId, BIZ.VIEW, '1', token);
         console.log(`[锁卷201] 已锁定查看态报告 ${lockId}（bizCode=201，不触碰任务原报告）`);
         return lockId;
@@ -804,7 +779,6 @@
             answers.push(item);
         }
 
-        // 禁止空卷提交：没有任何有效答案时直接中止，不再执行交卷/自批
         if (!answers.length) {
             throw new Error("未获取到任何有效答案，已禁止提交空卷（请检查试卷或稍后重试）");
         }
@@ -814,7 +788,383 @@
         await submitCorrected(paperId, submitReportId, bizCode, platform, token);
     }
 
-    // ==================== UI（完全对标风月同天脚本样式） ====================
+    // ==================== 仅获取答案功能 ====================
+    function showAnswerModal(results, questions, paperId, platform, submitBizCode, homeworkId, paperTitle, totalCount) {
+        document.querySelectorAll('.ewt-answer-overlay').forEach(el => el.remove());
+        const overlay = document.createElement('div');
+        overlay.className = 'ewt-answer-overlay';
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.45); z-index: 99998;
+            display: flex; align-items: center; justify-content: flex-start;
+            padding-left: 20px; opacity: 0; pointer-events: none;
+            transition: opacity 0.3s ease;
+        `;
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background: #ffffff; border-radius: 20px; width: 750px; max-width: 80vw;
+            max-height: 90vh; display: flex; flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            transform: scale(0.95) translateY(20px);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            opacity: 0; overflow: hidden;
+        `;
+        // header
+        const header = document.createElement('div');
+        header.style.cssText = `
+            padding: 18px 24px; border-bottom: 1px solid rgba(0,0,0,0.06);
+            font-size: 18px; font-weight: 600; display: flex;
+            justify-content: space-between; align-items: center;
+            color: #2d3748; background: #f7fafc;
+            border-radius: 20px 20px 0 0;
+        `;
+        const title = document.createElement('span');
+        const displayTitle = paperTitle || '试题';
+        const displayCount = (typeof totalCount === 'number' && totalCount > 0) ? totalCount : results.length;
+        title.textContent = `📝 ${displayTitle} 答案 (共 ${displayCount} 题)`;
+        title.style.cssText = `flex: 1; word-wrap: break-word; white-space: normal; padding-right: 12px;`;
+        const closeBtn = document.createElement('button');
+        closeBtn.style.cssText = `
+            cursor: pointer; font-size: 24px; color: #a0aec0; line-height: 1;
+            background: none; border: none; padding: 0 4px; flex-shrink: 0;
+        `;
+        closeBtn.textContent = '×';
+        closeBtn.title = '关闭';
+        header.appendChild(title);
+        header.appendChild(closeBtn);
+        modal.appendChild(header);
+        // body
+        const body = document.createElement('div');
+        body.style.cssText = `
+            padding: 20px 24px; overflow-y: auto; flex: 1;
+            line-height: 1.7; font-size: 14px; color: #2d3748; background: #ffffff;
+        `;
+        results.forEach(r => {
+            const qDiv = document.createElement('div');
+            qDiv.style.cssText = `
+                background: #f7fafc; margin: 12px 0; padding: 16px 18px;
+                border-radius: 14px; border-left: 4px solid #667eea;
+                transition: background 0.2s;
+            `;
+            const safeGroup = escapeHtml(r.group || '');
+            const ansHtml = cleanHtmlKeepImg(String(r.answer ?? ''));
+            const parseHtml = r.analysis ? cleanHtmlKeepImg(String(r.analysis)) : '';
+            const knowledgeHtml = r.knowledge ? escapeHtml(String(r.knowledge)) : '';
+            qDiv.innerHTML = `
+                <div style="font-weight:700; color:#2d3748; margin-bottom:4px; font-size:15px;">[${r.num}] ${safeGroup}</div>
+                <div style="color:#e53e3e; margin:4px 0 6px; font-weight:500;">答案: ${ansHtml || (r.subResults && r.subResults.length ? '(见子题答案)' : '')}</div>
+                ${knowledgeHtml ? `<div style="color:#718096; font-size:12px; margin:2px 0;">🧠 知识点: ${knowledgeHtml}</div>` : ''}
+                ${parseHtml ? `<div style="color:#4a5568; font-size:13px; white-space:pre-wrap; margin-top:6px; padding:8px 12px; background:#ffffff; border-radius:8px;">📖 解析: ${parseHtml}</div>` : ''}
+            `;
+            if (r.images && r.images.length) {
+                r.images.forEach(src => {
+                    if (/^https?:\/\/file\.ewt360\.com\//.test(src)) {
+                        const img = document.createElement('img');
+                        img.src = src.replace(/^http:\/\//, 'https://');
+                        img.style.cssText = 'max-width:100%;margin-top:8px;border-radius:8px;';
+                        qDiv.appendChild(img);
+                    }
+                });
+            }
+            if (r.subResults && r.subResults.length) {
+                const subBox = document.createElement('div');
+                subBox.style.cssText = 'margin-top:10px;border-top:1px dashed #cbd5e0;padding-top:6px;';
+                r.subResults.forEach((sub, i) => {
+                    const subAns = cleanHtmlKeepImg(String(sub.answer ?? ''));
+                    const subParse = sub.analysis ? cleanHtmlKeepImg(String(sub.analysis)) : '';
+                    const subKnow = sub.knowledge ? escapeHtml(String(sub.knowledge)) : '';
+                    const subDiv = document.createElement('div');
+                    subDiv.style.cssText = 'margin:8px 0;padding:10px 12px;background:#ffffff;border-radius:8px;border-left:3px solid #f59e0b;';
+                    subDiv.innerHTML = `
+                        <div style="font-weight:600;color:#b7791f;font-size:13px;margin-bottom:2px;">${escapeHtml(sub.num || `(${i + 1})`)}${sub.cateName ? ` <span style="color:#a0aec0;font-weight:400;font-size:12px;">${escapeHtml(sub.cateName)}</span>` : ''}</div>
+                        <div style="color:#e53e3e;font-size:13px;">答案: ${subAns}</div>
+                        ${subKnow ? `<div style="color:#718096;font-size:12px;margin-top:2px;">🧠 知识点: ${subKnow}</div>` : ''}
+                        ${subParse ? `<div style="color:#4a5568;font-size:12px;white-space:pre-wrap;margin-top:4px;padding:6px 10px;background:#f7fafc;border-radius:6px;">📖 解析: ${subParse}</div>` : ''}
+                    `;
+                    if (sub.images && sub.images.length) {
+                        sub.images.forEach(src => {
+                            if (/^https?:\/\/file\.ewt360\.com\//.test(src)) {
+                                const img = document.createElement('img');
+                                img.src = src.replace(/^http:\/\//, 'https://');
+                                img.style.cssText = 'max-width:100%;margin-top:6px;border-radius:6px;';
+                                subDiv.appendChild(img);
+                            }
+                        });
+                    }
+                    subBox.appendChild(subDiv);
+                });
+                qDiv.appendChild(subBox);
+            }
+            body.appendChild(qDiv);
+        });
+        modal.appendChild(body);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => {
+            overlay.style.opacity = '1';
+            overlay.style.pointerEvents = 'auto';
+            modal.style.transform = 'scale(1) translateY(0)';
+            modal.style.opacity = '1';
+        });
+        const closeModal = () => {
+            overlay.style.opacity = '0';
+            overlay.style.pointerEvents = 'none';
+            modal.style.transform = 'scale(0.95) translateY(20px)';
+            modal.style.opacity = '0';
+            setTimeout(() => overlay.remove(), 300);
+        };
+        closeBtn.addEventListener('click', closeModal);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+        document.addEventListener('keydown', function esc(e) {
+            if (e.key === 'Escape' && overlay.style.opacity === '1') {
+                closeModal();
+                document.removeEventListener('keydown', esc);
+            }
+        });
+    }
+
+    // ===== 修改：fetchAndShowAnswers 改用 paper.bizCode =====
+    async function fetchAndShowAnswers(paper) {
+        console.group(`[获取答案] ${paper.title}`);
+        console.log(`paperId=${paper.paperId}, bizCode=${paper.bizCode}, homeworkId=${paper.homeworkId}`);
+        const token = getToken();
+        try {
+            let boundReportId = null;
+            try {
+                const br = await getReportId(paper.paperId, paper.bizCode, token);
+                if (br && br !== '0') boundReportId = br;
+            } catch (e) { boundReportId = null; }
+            if (boundReportId) console.log(`[获取答案] 任务已绑定报告 reportId=${boundReportId}`);
+
+            let answerReportId = null;
+            const candidates = [];
+            if (paper.reportId && paper.reportId !== '0' && paper.reportId !== 'undefined') {
+                candidates.push({ id: String(paper.reportId), src: 'URL' });
+            }
+            candidates.push({ id: 'LATEST', src: 'getReportId' });
+            candidates.push({ id: 'VIEW', src: 'getReportId-201' });
+
+            for (const cand of candidates) {
+                try {
+                    let rid = cand.id;
+                    if (rid === 'LATEST') {
+                        rid = await getReportId(paper.paperId, paper.bizCode, token);
+                    }
+                    if (rid === 'VIEW') {
+                        rid = await getReportId(paper.paperId, BIZ.VIEW, token);
+                    }
+                    if (!rid) continue;
+                    const st = await getReportStatus(paper.paperId, rid, paper.bizCode, token);
+                    if (st && st.finish === true) {
+                        answerReportId = rid;
+                        console.log(`[获取答案] 取答案使用已完成报告 reportId=${rid} (来源: ${cand.src})`);
+                        break;
+                    }
+                    console.log(`[获取答案] 候选报告 ${rid} (${cand.src}) 未完成，尝试下一个`);
+                } catch (e) {
+                    console.warn(`[获取答案] 候选报告检查失败 (${cand.src}):`, e.message);
+                }
+            }
+
+            if (!answerReportId) {
+                try {
+                    answerReportId = await lockReport201(paper.paperId, token);
+                    console.log(`[获取答案] 无已完成报告，201通道锁卷报告 ${answerReportId} 换取答案（不污染任务成绩）`);
+                } catch (e) {
+                    console.warn('[获取答案] 201通道锁卷失败:', e.message);
+                }
+                if (!answerReportId) {
+                    try {
+                        const lockId = await initReport(paper.paperId, '0', paper.bizCode, '1', token);
+                        if (boundReportId && String(lockId) === String(boundReportId)) {
+                            throw new Error('initReport复用任务原报告，锁卷即污染，放弃');
+                        }
+                        const lockSt = await getReportStatus(paper.paperId, lockId, paper.bizCode, token);
+                        if (lockSt && lockSt.homeworkId !== undefined && String(lockSt.homeworkId) !== '0') {
+                            throw new Error(`锁卷报告归属异常 homeworkId=${lockSt.homeworkId}，放弃`);
+                        }
+                        await updateReport(paper.paperId, lockId, paper.bizCode, '1', token);
+                        answerReportId = lockId;
+                        console.log(`[获取答案] 205空间锁卷报告 ${lockId}（归属复核通过）`);
+                    } catch (e) {
+                        console.warn('[获取答案] 锁卷兜底失败:', e.message);
+                    }
+                }
+            }
+
+            if (!answerReportId) {
+                throw new Error("未获取到答案源报告（既无已完成报告，锁卷兜底也失败）");
+            }
+
+            const paperInfo = await getPaperInfo(paper.paperId, answerReportId, '1', paper.bizCode, token);
+            const fullScoreMap = new Map();
+            const metaMap = new Map();
+            const childNoMap = new Map();
+            const childCateMap = new Map();
+            const collectChildNo = (list) => {
+                for (const q of list) {
+                    if (q.childQuestions && q.childQuestions.length) {
+                        for (const c of q.childQuestions) {
+                            const cKey = c.id ?? c.questionId;
+                            if (cKey != null && c.questionNoShow) childNoMap.set(String(cKey), c.questionNoShow);
+                            if (cKey != null && c.cateName) childCateMap.set(String(cKey), c.cateName);
+                        }
+                        collectChildNo(q.childQuestions);
+                    }
+                }
+            };
+            const traverseQuestions = (list) => {
+                for (const q of list) {
+                    const fullScore = q.fullScore !== undefined ? q.fullScore : (q.score !== undefined ? q.score : 0);
+                    const qKey = q.id ?? q.questionId;   // 兼容 id / questionId 两种字段
+                    if (qKey != null) {
+                        fullScoreMap.set(qKey, fullScore);
+                        metaMap.set(qKey, { cate: q.cate ?? q.cateId ?? 1, subjective: q.subjective ?? false });
+                    }
+                    if (q.childQuestions && q.childQuestions.length) {
+                        traverseQuestions(q.childQuestions);
+                    }
+                }
+            };
+            if (paperInfo && paperInfo.questions) {
+                traverseQuestions(paperInfo.questions);
+                collectChildNo(paperInfo.questions);
+            }
+            let questions = null;
+            let allAnswers = null;
+            const webReport = await getWebReportAnswers(paper, answerReportId, paper.bizCode, token);
+            if (webReport && webReport.questions && webReport.questions.length) {
+                questions = webReport.questions;   // 已归一化 questionId，含全部答案/解析字段
+                allAnswers = questions.map(q => ({ question: q, answer: q }));
+            } else {
+                questions = await getQuestions(paper.paperId, answerReportId, '1', paper.bizCode, token);
+                if (!questions || !questions.length) {
+                    throw new Error("未获取到题目列表（可能是新试卷或接口异常）");
+                }
+                allAnswers = await mapLimit(questions, CONCURRENCY.ANSWER, async (q) => {
+                    const ans = await getAnswer(paper.paperId, answerReportId, q.questionId, paper.bizCode, '1', token);
+                    return ans ? { question: q, answer: ans } : null;
+                });
+            }
+            const validAnswers = allAnswers.filter(Boolean);
+            const expandedQuestions = [];
+            const expandedResults = [];
+            for (const item of validAnswers) {
+                const q = item.question;
+                const ans = item.answer;
+                const childQs = ans.childQuestions || [];
+                const parentRight = ans.rightAnswer || [];
+                if (childQs.length > 0 && parentRight.length === 0) {
+                    const groupName = ans.subjectQuestionTypeName || q.groupName;
+                    const subResults = childQs.map((child, childIdx) => {
+                        const childId = child.questionId;
+                        const fullScore = fullScoreMap.get(childId) || 0;
+                        const childRight = child.rightAnswer || [];
+                        const childAnalyse = child.analyse || '';
+                        const childKnowledge = child.knowledgeTitle || ans.knowledgeTitle || '';
+                        const childImages = child.attachmentImages || [];
+                        const meta = metaMap.get(childId);
+                        const cate = meta ? meta.cate : (q.cateId || 1);
+                        const subjective = meta ? meta.subjective : (q.subjective || false);
+                        const opts = extractOpts(childRight);
+                        const childType = childCateMap.get(String(childId)) || '';
+                        const isChildMulti = /多选|不定项/.test(childType);
+                        let answerStr;
+                        if (opts.length > 1 && isChildMulti) {
+                            answerStr = opts.join('、');
+                        } else if (opts.length) {
+                            answerStr = opts.join(', ');
+                        } else if (childRight.length) {
+                            if (childRight.length > 1) {
+                                const cleaned = childRight.map((item, idx) => (idx + 1) + '、' + cleanHtmlKeepImg(item) + ';');
+                                answerStr = cleaned.join('<br>');
+                            } else {
+                                answerStr = cleanHtmlKeepImg(childRight[0]);
+                            }
+                        } else {
+                            answerStr = '(主观题)';
+                        }
+                        return {
+                            num: childNoMap.get(String(childId)) || ('(' + (childIdx + 1) + ')'),
+                            cateName: childCateMap.get(String(childId)) || '',
+                            questionId: childId, cateId: cate, subjective: subjective,
+                            fullScore: fullScore, score: child.score || fullScore || 0,
+                            answer: answerStr, knowledge: childKnowledge,
+                            analysis: cleanHtmlKeepImg(childAnalyse),
+                            images: childImages, rawRightAnswer: childRight,
+                        };
+                    });
+                    expandedQuestions.push({
+                        ...q, cateId: q.cateId || 1, subjective: q.subjective || false,
+                        fullScore: fullScoreMap.get(q.questionId) || 0, score: ans.score || 0,
+                    });
+                    expandedResults.push({
+                        num: '', group: groupName, answer: '',
+                        knowledge: (ans.knowledges || []).map(k => k.title).join('、'),
+                        analysis: cleanHtmlKeepImg(ans.analyse || ''),
+                        images: ans.attachmentImages || [], rawRightAnswer: parentRight,
+                        questionId: q.questionId, subjective: q.subjective || false,
+                        subResults: subResults,
+                    });
+                } else {
+                    const fullScore = fullScoreMap.get(q.questionId) || 0;
+                    const opts = extractOpts(ans.rightAnswer || []);
+                    const isMultiChoice = /多选|不定项/.test((ans.subjectQuestionTypeName || '') + ' ' + (q.groupName || ''));
+                    let answerStr;
+                    if (opts.length) {
+                        if (opts.length > 1 && isMultiChoice) {
+                            answerStr = opts.join('、');
+                        } else if (opts.length > 1) {
+                            const allSingle = opts.every(o => /^[A-Z]$/.test(o));
+                            if (allSingle) {
+                                answerStr = opts.map((o, idx) => (idx+1) + '、' + o + ';').join('<br>');
+                            } else {
+                                answerStr = opts.join(', ');
+                            }
+                        } else {
+                            answerStr = opts.join(', ');
+                        }
+                    } else if (ans.rightAnswer && ans.rightAnswer.length) {
+                        const raw = ans.rightAnswer;
+                        if (raw.length > 1) {
+                            const cleaned = raw.map((item, idx) => (idx+1) + '、' + cleanHtmlKeepImg(item) + ';');
+                            answerStr = cleaned.join('<br>');
+                        } else {
+                            answerStr = cleanHtmlKeepImg(raw[0]);
+                        }
+                    } else {
+                        answerStr = '(主观题)';
+                    }
+                    expandedQuestions.push({
+                        ...q, cateId: q.cateId || 1, subjective: q.subjective || false,
+                        fullScore: fullScore, score: ans.score || fullScore || 0,
+                    });
+                    expandedResults.push({
+                        num: '', group: q.groupName, answer: answerStr,
+                        knowledge: (ans.knowledges || []).map(k => k.title).join('、'),
+                        analysis: cleanHtmlKeepImg(ans.analyse || ''),
+                        images: ans.attachmentImages || [], rawRightAnswer: ans.rightAnswer || [],
+                        questionId: q.questionId, subjective: q.subjective || false,
+                    });
+                }
+            }
+            expandedQuestions.forEach((q, idx) => { q.questionNumber = String(idx + 1); });
+            expandedResults.forEach((r, idx) => { r.num = String(idx + 1); });
+            fixGroupAnswers(expandedResults);
+            const totalCount = (paperInfo && typeof paperInfo.questionCount === 'number' && paperInfo.questionCount > 0)
+                ? paperInfo.questionCount
+                : (webReport ? webReport.questionCount : undefined);
+            showAnswerModal(expandedResults, expandedQuestions, paper.paperId, '1', paper.bizCode, paper.homeworkId, paper.title, totalCount);
+            console.log(`[获取答案] ✅ 答案已展示`);
+            console.groupEnd();
+        } catch (e) {
+            console.error(`[获取答案] ❌ 失败: ${paper.title}`, e);
+            alert('获取答案失败: ' + e.message);
+            console.groupEnd();
+        }
+    }
+
+    // ==================== UI ====================
     const STYLE_ID = "ewt-paper-helper-style";
     function injectStyles() {
         if (document.getElementById(STYLE_ID)) return;
@@ -1019,9 +1369,8 @@
   font-weight: 600;
   font-size: 13px;
   color: #4a4a6a;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-wrap: break-word;
+  white-space: normal;
 }
 .eph-hw-header .eph-hw-count {
   font-size: 11px;
@@ -1074,9 +1423,8 @@
   font-size: 13px;
   font-weight: 500;
   color: #4a4a6a;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-wrap: break-word;
+  white-space: normal;
 }
 .eph-paper-item .eph-paper-meta {
   font-size: 11px;
@@ -1112,6 +1460,31 @@
   background: linear-gradient(135deg, #86efac 0%, #6ee7b7 100%);
   cursor: default;
   box-shadow: none;
+}
+.eph-paper-item .eph-answer-btn {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  box-shadow: 0 2px 6px rgba(251, 191, 36, 0.3);
+  margin-left: 4px;
+}
+.eph-paper-item .eph-answer-btn:disabled {
+  background: #d1d5db;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+.eph-paper-item .eph-answer-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(251, 191, 36, 0.45);
 }
 
 @keyframes pulse {
@@ -1266,6 +1639,51 @@
         document.head.appendChild(style);
     }
 
+    // -------- 答案视图渲染函数 --------
+    function renderAnswerView(container, groups) {
+        container.innerHTML = "";
+        if (!groups || groups.length === 0) {
+            container.innerHTML = `<div class="eph-empty">暂无练习，请先在「任务」页刷新列表</div>`;
+            return;
+        }
+        for (const group of groups) {
+            const item = document.createElement("div");
+            item.className = "eph-hw-item";
+            const hd = document.createElement("div");
+            hd.className = "eph-hw-header";
+            hd.innerHTML = `<span class="eph-hw-title">📚 ${escapeHtml(group.title)}</span> <span class="eph-hw-count">${group.papers.length}个</span> <span class="eph-arrow">▶</span>`;
+            const list = document.createElement("div");
+            list.className = "eph-paper-list";
+            for (const paper of group.papers) {
+                const pi = document.createElement("div");
+                pi.className = "eph-paper-item";
+                const info = document.createElement("div");
+                info.className = "eph-paper-info";
+                const typeLabel = paper.type ? `[${paper.type}] ` : "";
+                const qCount = paper.questionCount ?? "?";
+                info.innerHTML = `<div class="eph-paper-title">${typeLabel}${escapeHtml(paper.title)}</div> <div class="eph-paper-meta">${qCount}题${paper.subjectName ? ` · ${escapeHtml(paper.subjectName)}` : ""}${paper.dayLabel ? ` · 📅 ${escapeHtml(paper.dayLabel)}` : ""}</div>`;
+                pi.appendChild(info);
+                const answerBtn = document.createElement("button");
+                answerBtn.className = "eph-answer-btn";
+                answerBtn.textContent = "📄 获取答案";
+                answerBtn.onclick = () => {
+                    answerBtn.disabled = true;
+                    answerBtn.textContent = "⏳ 获取中...";
+                    fetchAndShowAnswers(paper).finally(() => {
+                        answerBtn.disabled = false;
+                        answerBtn.textContent = "📄 获取答案";
+                    });
+                };
+                pi.appendChild(answerBtn);
+                list.appendChild(pi);
+            }
+            hd.onclick = () => { hd.classList.toggle("open"); list.classList.toggle("open"); };
+            item.appendChild(hd);
+            item.appendChild(list);
+            container.appendChild(item);
+        }
+    }
+
     function createPanel(cbs) {
         injectStyles();
         const toggle = document.createElement("button");
@@ -1288,9 +1706,12 @@
         const tabMain = document.createElement("button");
         tabMain.textContent = "📋 任务";
         tabMain.className = "active";
+        const tabAnswer = document.createElement("button");
+        tabAnswer.textContent = "📄 答案";
         const tabAbout = document.createElement("button");
         tabAbout.textContent = "ℹ️ 关于";
         tabs.appendChild(tabMain);
+        tabs.appendChild(tabAnswer);
         tabs.appendChild(tabAbout);
         panel.appendChild(tabs);
 
@@ -1299,28 +1720,22 @@
         mainView.id = "eph-view-main";
         const toolbar = document.createElement("div");
         toolbar.className = "eph-toolbar";
-
         const refreshBtn = document.createElement("button");
         refreshBtn.textContent = "🔄 刷新列表";
         toolbar.appendChild(refreshBtn);
-
         const brushAllBtn = document.createElement("button");
         brushAllBtn.id = "eph-brush-all";
         brushAllBtn.textContent = "🚀 一键刷取";
         brushAllBtn.addEventListener("click", () => cbs.onBrushAll());
         toolbar.appendChild(brushAllBtn);
-
         const stopBtn = document.createElement("button");
         stopBtn.id = "eph-stop";
         stopBtn.textContent = "⏹ 停止";
         stopBtn.disabled = true;
         stopBtn.addEventListener("click", () => cbs.onStop());
         toolbar.appendChild(stopBtn);
-
         mainView.appendChild(toolbar);
 
-        // 仅对习题有效：204课后习题走官方 reAnswerPaper 重做（绑定自动更新）；
-        // 205试卷任务成绩固化，重刷仅生成满分报告，无法改写任务成绩
         const redoBar = document.createElement("div");
         redoBar.className = "eph-toolbar";
         redoBar.style.cssText = "padding:6px 16px 10px;gap:6px;flex-wrap:wrap;";
@@ -1334,7 +1749,6 @@
         redoCheck.style.cssText = "accent-color:#1677ff;width:14px;height:14px;";
         redoCheck.addEventListener("change", () => {
             forceRedo = redoCheck.checked;
-            // 重新渲染当前列表，使已完成任务的按钮变为「重做」可点（用 createPanel 局部变量 listContainer）
             if (typeof groupsCache !== "undefined" && groupsCache.length) {
                 renderPaperList(listContainer, groupsCache, cbs.onBrushPaper || brushPaper);
             }
@@ -1399,7 +1813,14 @@
         mainView.appendChild(listContainer);
         panel.appendChild(mainView);
 
-        // ========== 关于页面 ==========
+        const answerView = document.createElement("div");
+        answerView.className = "eph-view";
+        answerView.id = "eph-view-answer";
+        const answerContainer = document.createElement("div");
+        answerContainer.className = "eph-list";
+        answerView.appendChild(answerContainer);
+        panel.appendChild(answerView);
+
         const aboutView = document.createElement("div");
         aboutView.className = "eph-view";
         aboutView.id = "eph-view-about";
@@ -1407,25 +1828,22 @@
         aboutContent.className = "eph-about";
         aboutContent.innerHTML = `
           <div class="eph-about-avatar">🌸</div>
-          <div class="eph-about-name">升学e网通 试卷及习题助手 <span style="font-size:12px;color:#a78bfa;font-weight:600;">v1.1.0</span></div>
+          <div class="eph-about-name">升学e网通 学习助手opt <span style="font-size:12px;color:#a78bfa;font-weight:600;">v1.1.1</span></div>
           <div class="eph-about-desc">支持一键获取E网通试卷及习题答案并自动填写提交<br/>全部免费 🆓</div>
-
           <div class="eph-about-section">
             <h3>📢 使用须知</h3>
-            <div class="eph-about-rate-item"><span class="dot"></span> 支持一键提交，提交后自动批改，满分完成</div>
-            <div class="eph-about-rate-item"><span class="dot"></span> 支持独立试卷与课程任务</div>
+            <div class="eph-about-rate-item"><span class="dot"></span> 支持一键提交,提交后自动批改,满分完成</div>
+            <div class="eph-about-rate-item"><span class="dot"></span> 支持独立试卷与课程任务,支持独立查看答案</div>
             <div class="eph-about-rate-item"><span class="dot"></span> 使用本工具即代表同意合理使用</div>
+
+          </div>
+          <div class="eph-about-section">
+            <h3>✨ v1.1.1 更新内容</h3>
+            <div class="eph-about-rate-item"><span class="dot"></span> <b>统一提交逻辑（重大）</b>：课后习题(204)、独立试卷(205)、试卷变体(206)、校本试卷(207) 统一走「自动填答 → 交卷 → 自批满分」标准三连，一套链路通刷，不再各写各的</div>
+            <div class="eph-about-rate-item"><span class="dot"></span> <b>新增 206 试卷支持</b>：扫描时从任务 contentUrl 提取真实 bizCode，206 试卷不再被误判为 205 提交失败，现已自动识别并满分刷取</div>
+            <div class="eph-about-rate-item"><span class="dot"></span> <b>修复校本试卷(207) 满分提交</b>：207 回归标准三连（主观题自批满分），废弃会判 0 分的空卷提交分支</div>
           </div>
 
-                              <div class="eph-about-section">
-            <h3>🔥 v1.1.0 重大更新</h3>
-            <div class="eph-about-rate-item"><span class="dot"></span> <b>新增「校本试卷」总任务页刷取通道（bizCode=207）</b>：此前校本试卷只能在具体试卷页刷、总任务页无法刷，现已支持总任务页一键刷取并自动满分</div>
-            <div class="eph-about-rate-item"><span class="dot"></span> 锁卷载体迁移至 201 通道：与任务成绩空间完全隔离，杜绝「时好时坏」污染真实成绩</div>
-            <div class="eph-about-rate-item"><span class="dot"></span> 提交满分前归属复核：服务器复用原报告时立即中止，双重防护任务成绩</div>
-            <div class="eph-about-rate-item"><span class="dot"></span> 答案读取对 205/207 统一走题组嵌套 questionGroup，校本试卷答案可正常获取</div>
-            <div class="eph-about-rate-item"><span class="dot"></span> 任务列表排序修复：课程/试卷按服务器真实顺序展示，不再试卷前置</div>
-            <div class="eph-about-rate-item"><span class="dot"></span> 关于页作者区域增加分隔线、清理冗余中文注释，界面更清晰</div>
-          </div>
 <div class="eph-about-section">
             <h3>👨‍💻 作者团队</h3>
             <div class="eph-about-rate-item"><span class="dot"></span> <strong>🌸 风月同天</strong> — 原始脚本参考 &amp; UI设计</div>
@@ -1440,10 +1858,8 @@
               <div id="eph-reward-loading" style="color:#a78bfa; font-size:12px;">🪄 赞赏码加载中…</div>
             </div>
           </div>
-
           <div class="eph-about-section">
             <h3>🔗 相关链接</h3>
-
             <!-- 风月同天 -->
             <div style="margin-bottom:18px; padding-bottom:14px; border-bottom:1px dashed #e9e0ff;">
               <div style="font-weight:600; font-size:13px; color:#4a4a6a;">🌸 风月同天</div>
@@ -1452,7 +1868,6 @@
               <div class="eph-about-link-item"><span>📦 源码仓库</span><a href="https://github.com/ZZ0YY/EWT-TOOL" target="_blank">GitHub</a></div>
               <div class="eph-about-link-item"><span>📥 Greasy Fork</span><a href="https://greasyfork.org/zh-CN/scripts/587786" target="_blank">安装页面</a></div>
             </div>
-
             <!-- 志成 -->
             <div style="margin-bottom:18px; padding-bottom:14px; border-bottom:1px dashed #e9e0ff;">
               <div style="font-weight:600; font-size:13px; color:#4a4a6a;">🍥 志成</div>
@@ -1461,14 +1876,13 @@
               <div class="eph-about-link-item"><span>📦 源码仓库</span><a href="https://github.com/zhicheng233/GetEWTAnswers" target="_blank">GitHub</a></div>
               <div class="eph-about-link-item"><span>📥 Greasy Fork</span><a href="https://greasyfork.org/zh-CN/scripts/524802" target="_blank">安装页面</a></div>
             </div>
-
             <!-- Zoan -->
             <div>
               <div style="font-weight:600; font-size:13px; color:#4a4a6a;">⚡ Zoan</div>
               <div class="eph-about-link-item"><span>📧 QQ</span><a href="https://qm.qq.com/cgi-bin/qm/qr?k=Ok_Wy_7bW0yMS9MrXLOp8PW0Ci0Gcn9A" target="_blank">1478359473</a></div>
               <div class="eph-about-link-item"><span>📧 Gmail</span><a href="mailto:zoan0404@gmail.com">zoan0404@gmail.com</a></div>
               <div class="eph-about-link-item"><span>📦 源码仓库</span><a href="https://github.com/Zoan0404/ewt360-study-helper" target="_blank">GitHub</a></div>
-              <div class="eph-about-link-item"><span>📥 Greasy Fork</span><a href="https://greasyfork.org/zh-CN/scripts/591256" target="_blank">安装页面</a></div>
+              <div class="eph-about-link-item"><span>📥 Greasy Fork</span><a href="https://greasyfork.org/zh-CN/scripts/591258" target="_blank">安装页面</a></div>
             </div>
           </div>
         `;
@@ -1482,11 +1896,14 @@
 
         function showView(id) {
             mainView.classList.toggle("active", id === "eph-view-main");
+            answerView.classList.toggle("active", id === "eph-view-answer");
             aboutView.classList.toggle("active", id === "eph-view-about");
             tabMain.classList.toggle("active", id === "eph-view-main");
+            tabAnswer.classList.toggle("active", id === "eph-view-answer");
             tabAbout.classList.toggle("active", id === "eph-view-about");
         }
         tabMain.onclick = () => showView("eph-view-main");
+        tabAnswer.onclick = () => showView("eph-view-answer");
         tabAbout.onclick = () => showView("eph-view-about");
 
         // ============ 赞赏码加载（gh-proxy 镜像优先 · raw 直链回退；GM_xmlhttpRequest 绕过页面 CSP） ============
@@ -1506,7 +1923,6 @@
                     img.alt = "微信赞赏码";
                     img.style.cssText = "width:100%; max-width:330px; height:auto; border-radius:12px; margin:8px auto; display:block; cursor:zoom-in;";
                     img.onclick = () => {
-                        // 点击在「紧凑 / 尽量大」间切换
                         img.style.maxWidth = (img.style.maxWidth === "330px") ? "100%" : "330px";
                         img.style.width = (img.style.maxWidth === "100%") ? "100%" : String(window.getComputedStyle(box).width || "330px");
                     };
@@ -1526,7 +1942,6 @@
                     responseType: "blob",
                     timeout: 8000,
                     onload: (res) => {
-                        // blob 只要拿到对象即视为有效
                         if (res.status === 200 && res.response && typeof res.response === "object") {
                             showSrc(URL.createObjectURL(res.response));
                         } else if (url !== REWARD_RAW) {
@@ -1539,7 +1954,6 @@
                     ontimeout: () => { if (url !== REWARD_RAW) fetchQR(REWARD_RAW); else showSrc(REWARD_RAW); }
                 });
             };
-            // 镜像优先，失败自动回退原站；同一把锁保证最多只渲染一张
             if (!fetchQR(REWARD_PROXY)) showSrc(REWARD_RAW);
         }
         tabAbout.addEventListener("click", loadRewardQR, { once: true });
@@ -1566,11 +1980,11 @@
         document.body.appendChild(toggle);
         document.body.appendChild(panel);
 
-        // 默认显示主视图
         showView("eph-view-main");
 
         return {
             panel, listContainer, statusBar, progress, refreshBtn, brushAllBtn, stopBtn,
+            answerContainer,
             show() { isOpen = true; panel.classList.add("open"); },
             hide() { isOpen = false; panel.classList.remove("open"); }
         };
@@ -1587,9 +2001,7 @@
             item.className = "eph-hw-item";
             const hd = document.createElement("div");
             hd.className = "eph-hw-header";
-            hd.innerHTML = `<span class="eph-hw-title">${escapeHtml(group.title)}</span>
-                            <span class="eph-hw-count">${group.papers.length}个</span>
-                            <span class="eph-arrow">▶</span>`;
+            hd.innerHTML = `<span class="eph-hw-title">${escapeHtml(group.title)}</span> <span class="eph-hw-count">${group.papers.length}个</span> <span class="eph-arrow">▶</span>`;
             const list = document.createElement("div");
             list.className = "eph-paper-list";
             for (const paper of group.papers) {
@@ -1602,8 +2014,7 @@
                 const typeLabel = paper.type ? `[${paper.type}] ` : "";
                 const doneLabel = paper.done ? " ✅" : "";
                 const qCount = paper.questionCount ?? "?";
-                info.innerHTML = `<div class="eph-paper-title">${typeLabel}${escapeHtml(paper.title)}${doneLabel}</div>
-                                  <div class="eph-paper-meta">${qCount}题${paper.subjectName ? ` · ${escapeHtml(paper.subjectName)}` : ""}${paper.dayLabel ? ` · 📅 ${escapeHtml(paper.dayLabel)}` : ""}</div>`;
+                info.innerHTML = `<div class="eph-paper-title">${typeLabel}${escapeHtml(paper.title)}${doneLabel}</div> <div class="eph-paper-meta">${qCount}题${paper.subjectName ? ` · ${escapeHtml(paper.subjectName)}` : ""}${paper.dayLabel ? ` · 📅 ${escapeHtml(paper.dayLabel)}` : ""}</div>`;
                 pi.appendChild(info);
                 const btn = document.createElement("button");
                 btn.className = "eph-brush-btn";
@@ -1640,7 +2051,7 @@
     let groupsCache = [];
     let isBrushingAll = false;
     let stopRequested = false;
-    let forceRedo = false;   // 强制重刷开关（试卷/习题均可强制重做）
+    let forceRedo = false;   // 强制重刷开关（204习题走官方 reAnswerPaper 重做；205试卷仅生成满分报告，任务成绩固化）
 
     async function brushAll() {
         if (isBrushingAll) {
@@ -1713,7 +2124,6 @@
             try {
                 const paperId = currentTask.paperId;
                 let bizCode = currentTask.bizCode || BIZ.EXERCISE;
-                // 204/205 均探测失败时回退 201（VIEW 浏览码）：该报告在浏览场景下存在，analysis 兼容 201，聊胜于无
                 if (!currentTask.bizCode) {
                     const probeToken = getToken();
                     try {
@@ -1742,13 +2152,14 @@
                 const reportInfo = await getReportStatus(paperId, reportId, bizCode, token);
                 const title = paperInfo.title || "当前任务";
                 const questionCount = paperInfo.questionCount ?? "?";
-                const done = reportInfo?.finish === true;
-                const type = (bizCode === BIZ.EXERCISE) ? "习题" : (bizCode === BIZ.CUSTOM ? "校本" : (bizCode === BIZ.PAPER ? "试卷" : "浏览"));
+                const done = reportInfo ? reportInfo.finish === true : false;
+                const type = (bizCode === BIZ.EXERCISE) ? "习题" : (bizCode === BIZ.CUSTOM ? "校本" : (UNIFIED_SUBMIT_CODES.includes(bizCode)) ? "试卷" : "浏览");
 
                 const paper = { ...currentTask, bizCode, title, questionCount, done, type, brushing: false };
                 const group = { homeworkId, title: "当前任务", papers: [paper] };
                 groupsCache = [group];
                 renderPaperList(panel.listContainer, [group], brushPaper);
+                renderAnswerView(panel.answerContainer, groupsCache);
                 panel.statusBar.textContent = `📄 ${type} ${title} (${questionCount}题，${done ? '已完成' : '未完成'})`;
                 console.log(`当前任务详情: 标题=${title}, 题数=${questionCount}, 完成=${done}, 类型=${type}`);
                 console.groupEnd();
@@ -1760,6 +2171,7 @@
                 const groups = [{ homeworkId: currentTask.homeworkId, title: groupTitle, papers }];
                 groupsCache = groups;
                 renderPaperList(panel.listContainer, groups, brushPaper);
+                renderAnswerView(panel.answerContainer, groups);
                 panel.statusBar.textContent = "已识别当前任务（降级）";
                 console.log("当前页面任务（降级）");
                 console.groupEnd();
@@ -1794,6 +2206,7 @@
             if (!homeworks.length) {
                 panel.statusBar.textContent = "没有找到作业";
                 renderPaperList(panel.listContainer, [], () => {});
+                renderAnswerView(panel.answerContainer, []);
                 groupsCache = [];
                 console.log("没有找到任何作业");
                 console.groupEnd();
@@ -1812,13 +2225,15 @@
 
         groupsCache = groups;
         renderPaperList(panel.listContainer, groups, brushPaper);
+        renderAnswerView(panel.answerContainer, groups);
         const total = groups.reduce((s, g) => s + g.papers.length, 0);
         panel.statusBar.textContent = `📄 共 ${total} 个练习`;
         console.log(`加载完成，共 ${total} 个练习`);
         console.groupEnd();
     }
 
-        async function brushPaper(paper) {
+    // ===== 修改：brushPaper 函数，统一使用 paper.bizCode =====
+    async function brushPaper(paper) {
         console.group(`[刷题] ${paper.title}`);
         console.log(`paperId=${paper.paperId}, bizCode=${paper.bizCode}, homeworkId=${paper.homeworkId}`);
         showProgress(panel.progress, `正在刷: ${paper.title}`, "初始化报告中...");
@@ -1826,12 +2241,7 @@
         const startTime = Date.now();
         const token = getToken();
         try {
-            //      （新建未完成报告 analysis 返回 rightAnswer:[] / analyse:""）；
-            //      且锁卷报告不参与任务绑定（实测数学卷任务绑定 reportId/score 不变）；
-            //       204 课后习题的提交报告优先走官方 reAnswerPaper（绑定自动更新），失败降级 initReport。
 
-            // ① 选择答案源报告（已完成报告才支持取答案）
-            // 锁卷/创建新报告后 getReportId 会返回最新报告（锁卷报告），必须提前获取
             let boundReportId = null;
             try {
                 const br = await getReportId(paper.paperId, paper.bizCode, token);
@@ -1840,11 +2250,9 @@
             if (boundReportId) console.log(`[刷题] 任务已绑定报告 reportId=${boundReportId}（将作为提交报告，锁卷报告仅作答案源）`);
             let answerReportId = null;
             const candidates = [];
-            // 优先：URL 上的 reportId（当前页面报告的答卷页，通常是已完成报告）
             if (paper.reportId && paper.reportId !== '0' && paper.reportId !== 'undefined') {
                 candidates.push({ id: String(paper.reportId), src: 'URL' });
             }
-            // 次选：getReportId() 无参查询返回的最新报告
             candidates.push({ id: 'LATEST', src: 'getReportId' });
             candidates.push({ id: 'VIEW', src: 'getReportId-201' });
 
@@ -1870,17 +2278,13 @@
                 }
             }
 
-            // 兜底：无已完成报告 → v1.1.0 锁卷载体迁移到 201 通道（查看态报告查询即创建、无主不绑任务），
-            // 205 空间被原报告占住时 initReport('0') 会复用原报告，锁卷即污染——绝不走该路径
             if (!answerReportId) {
                 try {
-                    // v1.1.0：201 通道锁卷（bizCode=201 报告与任务成绩空间完全隔离）
                     answerReportId = await lockReport201(paper.paperId, token);
                     console.log(`[刷题] 无已完成报告，201通道锁卷报告 ${answerReportId} 换取答案（不污染任务成绩）`);
                 } catch (e) {
                     console.warn('[刷题] 201通道锁卷失败:', e.message);
                 }
-                // v1.1.0 二级兜底：201 也失败 → 205 空间锁卷前双重归属检测（复用检测 + fix2 归属回显检测）
                 if (!answerReportId) {
                     try {
                         const lockId = await initReport(paper.paperId, '0', paper.bizCode, '1', token);
@@ -1904,16 +2308,17 @@
                 throw new Error("未获取到答案源报告（既无已完成报告，锁卷兜底也失败），已中止刷取");
             }
 
-            // 获取试卷信息（用于 fullScoreMap / metaMap）
             const paperInfo = await getPaperInfo(paper.paperId, answerReportId, '1', paper.bizCode, token);
             const fullScoreMap = new Map();
             const metaMap = new Map();
             const traverseQuestions = (list) => {
                 for (const q of list) {
                     const fullScore = q.fullScore !== undefined ? q.fullScore : (q.score !== undefined ? q.score : 0);
-                    const qKey = q.id ?? q.questionId;   // 双 key 兼容：部分接口返回 questionId
-                    fullScoreMap.set(qKey, fullScore);
-                    metaMap.set(qKey, { cate: q.cate ?? q.cateId ?? 1, subjective: q.subjective ?? false });
+                    const qKey = q.id ?? q.questionId;   // 兼容 id / questionId 两种字段
+                    if (qKey != null) {
+                        fullScoreMap.set(qKey, fullScore);
+                        metaMap.set(qKey, { cate: q.cate ?? q.cateId ?? 1, subjective: q.subjective ?? false });
+                    }
                     if (q.childQuestions && q.childQuestions.length) {
                         traverseQuestions(q.childQuestions);
                     }
@@ -1923,7 +2328,6 @@
                 traverseQuestions(paperInfo.questions);
             }
 
-            // 失败或返回空自动回退 getQuestions + getAnswer 逐题并发方案
             let questions = null;
             let allAnswers = null;
             const webReport = await getWebReportAnswers(paper, answerReportId, paper.bizCode, token);
@@ -1931,29 +2335,19 @@
                 questions = webReport.questions;   // 已归一化 questionId，含全部答案/解析字段
                 allAnswers = questions.map(q => ({ question: q, answer: q }));
             } else {
-                // 获取题目列表，使用 paper.bizCode
                 questions = await getQuestions(paper.paperId, answerReportId, '1', paper.bizCode, token);
 
-                // 禁止空卷：题目列表为空时提前中止，避免无谓的答案请求与空卷提交
                 if (!questions || !questions.length) {
                     throw new Error("未获取到题目列表，已禁止空卷提交（可能是新试卷或接口异常）");
                 }
 
-                // 优化：并发获取每道题的答案，使用 paper.bizCode
-                allAnswers = await mapLimit(
-                    questions,
-                    CONCURRENCY.ANSWER,
-                    async (q) => {
-                        const ans = await getAnswer(paper.paperId, answerReportId, q.questionId, paper.bizCode, '1', token);
-                        return ans ? { question: q, answer: ans } : null;
-                    }
-                );
+                allAnswers = await mapLimit(questions, CONCURRENCY.ANSWER, async (q) => {
+                    const ans = await getAnswer(paper.paperId, answerReportId, q.questionId, paper.bizCode, '1', token);
+                    return ans ? { question: q, answer: ans } : null;
+                });
             }
-
-            // 过滤掉 null
             const validAnswers = allAnswers.filter(Boolean);
 
-            // 展开子母题
             const expandedQuestions = [];
             const expandedResults = [];
             for (const item of validAnswers) {
@@ -2070,21 +2464,16 @@
 
             fixGroupAnswers(expandedResults);
 
-            // 空卷保护：未获取到任何题目/答案时中止提交，避免提交空卷
             if (!expandedQuestions.length || !expandedResults.length) {
-                throw new Error("未获取到任何题目/答案，已中止提交（可能是新试卷或接口异常）");
+                throw new Error("未获取到任何题目/答案，已中止提交（避免提交空卷）");
             }
 
-            // ② 创建提交报告（与答案来源分离；答案提交用独立新报告，避免锁卷后提交被丢弃）
-            // reAnswerPaper 会转移旧报告「作答权」，若先调用可能使答案源旧报告失效（实测题2答案变空）
             let submitReportId = null;
-            // 锁卷报告仅作答案源用完即弃；即使部分试卷锁卷报告被服务器绑定，成绩仍由原报告决定，杜绝污染
             if (boundReportId && String(boundReportId) !== String(answerReportId)) {
                 submitReportId = boundReportId;
                 console.log(`[刷题] 使用任务已绑定报告 ${submitReportId} 提交（原报告答题，锁卷报告仅作答案源）`);
             }
-            // 205（试卷）服务器返回 7771522「该场景不支持再次作答」，自动降级 initReport
-            if (!submitReportId && paper.bizCode === BIZ.EXERCISE && answerReportId) {
+            if (!submitReportId && RETRYABLE_CODES.includes(paper.bizCode) && answerReportId) {
                 try {
                     submitReportId = await reAnswerPaper(answerReportId, token);
                     console.log(`[刷题] 204习题走官方重做通道 reAnswerPaper，新报告 ${submitReportId}（绑定将自动更新）`);
@@ -2094,26 +2483,25 @@
             }
             if (!submitReportId) {
                 submitReportId = await initReport(paper.paperId, paper.homeworkId, paper.bizCode, '1', token);
-                // v1.1.0：提交报告归属复核——若 initReport 复用了任务原报告（服务器在活跃会话占用时会如此），
-                // 拿它提交满分 = 直接改写原报告成绩（"时好时坏"污染的根源），必须中止保护真实成绩
                 if (boundReportId && String(submitReportId) === String(boundReportId)) {
                     throw new Error(`initReport复用任务原报告 ${submitReportId}，禁止提交满分（避免污染真实成绩），已中止`);
                 }
             }
 
-            // 提交时传入 submitReportId
+            // ===== 统一提交链（204/205/206/207 完全共用） =====
             await submitAllAndCorrect(paper.paperId, '1', paper.bizCode, expandedQuestions, expandedResults, paper.homeworkId, token, submitReportId);
 
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             console.log(`[刷题] ✅ 提交完成 (耗时 ${elapsed}s): ${paper.title}`);
             let doneMsg = `《${paper.title}》已提交 (${elapsed}s)`;
-            if (paper.done && paper.bizCode === BIZ.PAPER) {
+            if (paper.done && (paper.bizCode === BIZ.PAPER || paper.bizCode === BIZ.PAPER2)) {
                 doneMsg = `《${paper.title}》已生成新满分报告，但已完成试卷任务成绩固化（服务器限制），任务成绩不会更新`;
                 console.warn(`[刷题] ⚠️ ${doneMsg}`);
             }
             showProgress(panel.progress, "✅ 完成", doneMsg);
             panel.statusBar.textContent = `✅ ${paper.title} 完成`;
             markPaperDone(paper);
+            renderAnswerView(panel.answerContainer, groupsCache);
             setTimeout(() => hideProgress(panel.progress), 3000);
             console.groupEnd();
         } catch (e) {
@@ -2147,8 +2535,8 @@
     if (!getToken()) {
         console.warn("[EWT Helper] 未登录，脚本未启动");
         const tip = document.createElement("div");
-        tip.style.cssText = "position:fixed;right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:999999;background:linear-gradient(135deg,#f9a8d4,#a78bfa);color:#fff;padding:12px 18px;border-radius:14px;font-size:13px;font-weight:600;box-shadow:0 6px 24px rgba(167,139,250,.45);font-family:'Microsoft YaHei',sans-serif;";
-        tip.textContent = "🔑 未登录升学e网通，脚本未启动";
+        tip.textContent = "🔑 升学e网通学习助手：未检测到登录，请先登录后刷新页面";
+        tip.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:999999;background:linear-gradient(135deg,#f9a8d4,#a78bfa);color:#fff;padding:12px 18px;border-radius:12px;font-size:13px;box-shadow:0 6px 20px rgba(167,139,250,.5);font-family:'Microsoft YaHei',sans-serif;";
         document.body.appendChild(tip);
         setTimeout(() => tip.remove(), 8000);
     } else {
@@ -2163,7 +2551,7 @@
             }
         });
         panel.show();
-        console.log("[EWT Helper] 已启动，版本 v1.1.0");
+        console.log("[EWT Helper] 已启动，版本 v1.1.1");
         loadPapers().catch(e => {
             if (e instanceof TokenExpiredError) {
                 console.error("[登录过期]", e.message);
